@@ -1,15 +1,17 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
 :root {
   /* Brand Colors */
   --color-primary: #1E3A8A;
   --color-primary-hover: #172554;
   --color-primary-light: #EFF6FF;
-  
+
   /* Status Colors */
-  --status-cold: #60A5FA;    /* Kho Lạnh */
-  --status-dry: #F97316;     /* Kho Khô */
-  --status-fragile: #EF4444; /* Hàng hỏng/dễ vỡ */
-  --status-other: #9CA3AF;   /* Khác */
-  
+  --status-cold: #60A5FA;      /* Kho Lạnh */
+  --status-dry: #F97316;       /* Kho Khô */
+  --status-fragile: #EF4444;   /* Hàng hỏng/dễ vỡ */
+  --status-other: #9CA3AF;     /* Khác */
+
   /* Neutral Colors */
   --color-bg-main: #F9FAFB;
   --color-bg-panel: #FFFFFF;
@@ -17,16 +19,31 @@
   --color-text-secondary: #374151;
   --color-text-muted: #6B7280;
   --color-border: #E5E7EB;
-  
+
   /* Layout Dimensions */
-  --sidebar-width: 260px;
+  --sidebar-width: 240px;
+  --sidebar-width-sm: 200px;
   --topbar-height: 64px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+  /* Font */
+  --font-family-main: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+html {
+  font-size: 16px;
 }
 
 body {
@@ -35,11 +52,12 @@ body {
   color: var(--color-text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
 }
 
 h1, h2, h3, h4, h5, h6 {
   color: var(--color-text-primary);
-  margin-bottom: 0.5rem;
+  line-height: 1.2;
 }
 
 p {
@@ -59,32 +77,14 @@ button {
   outline: none;
 }
 
-/* Base App Layout */
-.app-container {
-  display: flex;
-  height: 100vh;
-  width: 100vw;
-  overflow: hidden;
-}
-
-.main-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  overflow: hidden;
-}
-
-.page-content {
-  flex: 1;
-  position: relative;
-  overflow: hidden;
+input, select, textarea {
+  font-family: inherit;
 }
 
 /* Common UI Elements */
 .card {
   background-color: var(--color-bg-panel);
-  border-radius: 8px;
+  border-radius: 10px;
   box-shadow: var(--shadow-sm);
   padding: 16px;
   border: 1px solid var(--color-border);
@@ -93,28 +93,32 @@ button {
 .btn-primary {
   background-color: var(--color-primary);
   color: white;
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-weight: 500;
-  transition: background-color 0.2s ease;
+  padding: 9px 18px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  transition: background-color 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .btn-primary:hover {
   background-color: var(--color-primary-hover);
 }
 
-/* Hide scrollbar for clean dashboard look */
+/* Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent; 
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1; 
+  background: #D1D5DB;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8; 
+  background: #9CA3AF;
 }

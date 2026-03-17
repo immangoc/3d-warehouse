@@ -1,42 +1,47 @@
-import { Bell, Search, Globe, Plus } from 'lucide-react';
+import { Bell, MessageCircle, Settings, Home, ChevronRight, ChevronDown, Menu } from 'lucide-react';
 import './Topbar.css';
 
-export function Topbar() {
+interface TopbarProps {
+  onMenuToggle?: () => void;
+}
+
+export function Topbar({ onMenuToggle }: TopbarProps) {
   return (
     <header className="topbar">
       <div className="topbar-left">
-        <div className="breadcrumbs">
-          <span className="breadcrumb-item">Home</span>
-          <span className="breadcrumb-separator">/</span>
+        <button className="menu-toggle" onClick={onMenuToggle} aria-label="Toggle menu">
+          <Menu size={20} />
+        </button>
+        <nav className="breadcrumbs" aria-label="breadcrumb">
+          <span className="breadcrumb-item">
+            <Home size={14} className="breadcrumb-home-icon" />
+          </span>
+          <ChevronRight size={14} className="breadcrumb-chevron" />
           <span className="breadcrumb-item">Điều độ bãi & Tối ưu hóa</span>
-          <span className="breadcrumb-separator">/</span>
+          <ChevronRight size={14} className="breadcrumb-chevron" />
           <span className="breadcrumb-item active">Sơ đồ 3D trực quan</span>
-        </div>
+        </nav>
       </div>
 
       <div className="topbar-right">
-        <div className="search-container">
-          <Search size={18} className="search-icon" />
-          <input 
-            type="text" 
-            placeholder="Nhập mã số Container..." 
-            className="search-input"
-          />
-        </div>
+        <button className="icon-btn language-btn">
+          <span className="flag-icon">🇻🇳</span>
+          <span className="lang-label">Tiếng Việt</span>
+          <ChevronDown size={14} />
+        </button>
 
-        <div className="topbar-actions">
-          <button className="icon-btn language-btn">
-            <Globe size={18} />
-            <span>Tiếng Việt</span>
-          </button>
-          
-          <button className="icon-btn notification-btn">
+        <div className="topbar-icons">
+          <button className="icon-btn notification-btn" aria-label="Notifications">
             <Bell size={20} />
             <span className="notif-badge">3</span>
           </button>
 
-          <button className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Plus size={18} /> Nhập / Xuất
+          <button className="icon-btn" aria-label="Messages">
+            <MessageCircle size={20} />
+          </button>
+
+          <button className="icon-btn" aria-label="Settings">
+            <Settings size={20} />
           </button>
         </div>
       </div>

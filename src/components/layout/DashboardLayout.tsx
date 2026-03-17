@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
@@ -8,14 +9,26 @@ interface DashboardLayoutProps {
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   return (
     <div className="app-container">
-      <Sidebar />
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div
+          className="sidebar-overlay"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      <div className={`sidebar-wrapper${sidebarOpen ? ' open' : ''}`}>
+        <Sidebar />
+      </div>
+
       <div className="main-content">
-        <Topbar />
-        <main className="page-content">
-          {children}
-        </main>
+        <Topbar onMenuToggle={() => setSidebarOpen((v) => !v)} />
+        <main className="page-content">{children}</main>
       </div>
     </div>
   );

@@ -1,11 +1,12 @@
 import { useState } from 'react';
+import { useRef } from 'react';
 import {
   Search, Plus, ChevronLeft, ZoomIn, ZoomOut, Compass,
   Package, Calendar, Truck, ChevronRight,
 } from 'lucide-react';
 import { DashboardLayout } from '../components/layout/DashboardLayout';
 import { WarehouseScene } from '../components/3d/WarehouseScene';
-import type { ZoneInfo } from '../components/3d/WarehouseScene';
+import type { ZoneInfo, SceneHandle } from '../components/3d/WarehouseScene';
 import { Legend } from '../components/ui/Legend';
 import './Warehouse3D.css';
 
@@ -200,6 +201,7 @@ export function Warehouse3D() {
   const [panelMode, setPanelMode]         = useState<PanelMode>(null);
   const [selectedZone, setSelectedZone]   = useState<ZoneInfo | null>(null);
   const [selectedCode, setSelectedCode]   = useState<string | undefined>(undefined);
+  const sceneRef = useRef<SceneHandle>(null);
 
   const showCard    = panelMode === null || panelMode === 'zone';
   const showButton  = !showCard;
@@ -267,11 +269,11 @@ export function Warehouse3D() {
         {/* ── Canvas row ── */}
         <div className="w3d-canvas-row">
           <div className="w3d-canvas-wrap">
-            <WarehouseScene onZoneClick={handleZoneClick} />
+            <WarehouseScene ref={sceneRef} onZoneClick={handleZoneClick} />
             <div className="w3d-controls">
-              <button className="ctrl-btn" aria-label="Zoom in"><ZoomIn size={18} /></button>
-              <button className="ctrl-btn" aria-label="Zoom out"><ZoomOut size={18} /></button>
-              <button className="ctrl-btn ctrl-btn-primary" aria-label="Reset view"><Compass size={18} /></button>
+              <button className="ctrl-btn" aria-label="Zoom in"   onClick={() => sceneRef.current?.zoomIn()}>   <ZoomIn  size={18} /></button>
+              <button className="ctrl-btn" aria-label="Zoom out"  onClick={() => sceneRef.current?.zoomOut()}>  <ZoomOut size={18} /></button>
+              <button className="ctrl-btn ctrl-btn-primary" aria-label="Reset view" onClick={() => sceneRef.current?.resetView()}><Compass size={18} /></button>
             </div>
           </div>
 

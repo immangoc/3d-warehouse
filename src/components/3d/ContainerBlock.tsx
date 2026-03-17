@@ -5,10 +5,13 @@ import * as THREE from 'three';
 
 export type ContainerStatus = 'cold' | 'dry' | 'fragile' | 'other';
 
+export type ContainerSize = '20ft' | '40ft';
+
 interface ContainerBlockProps {
   position: [number, number, number];
   status: ContainerStatus;
   id: string;
+  sizeType?: ContainerSize;
   zone?: string;
   floor?: number;
   slot?: string;
@@ -30,9 +33,9 @@ const statusLabel: Record<ContainerStatus, string> = {
 
 const WIDTH  = 2.4;
 const HEIGHT = 2.6;
-const LENGTH = 6;
 
-export function ContainerBlock({ position, status, id, zone = 'A', floor = 3, slot = 'CT01' }: ContainerBlockProps) {
+export function ContainerBlock({ position, status, id, sizeType = '20ft', zone = 'A', floor = 3, slot = 'CT01' }: ContainerBlockProps) {
+  const LENGTH = sizeType === '40ft' ? 12.5 : 6;
   const meshRef = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
 
@@ -102,7 +105,7 @@ export function ContainerBlock({ position, status, id, zone = 'A', floor = 3, sl
                 {[
                   { label: 'Mã số Container:', value: id, style: {} },
                   { label: 'Hãng tàu:', value: '', style: {} },
-                  { label: 'Loại Container:', value: `20ft - ${statusLabel[status]}`, style: {} },
+                  { label: 'Loại Container:', value: `${sizeType} - ${statusLabel[status]}`, style: {} },
                   { label: 'Trạng thái:', value: 'Lưu kho', style: { color: '#F97316', fontWeight: '600' } },
                   { label: 'Vị trí:', value: vLabel, style: { fontWeight: '700', color: '#111827' } },
                   { label: 'Ngày nhập bãi:', value: '20/01/2026', style: {} },

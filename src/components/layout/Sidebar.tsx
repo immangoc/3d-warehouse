@@ -2,27 +2,28 @@ import {
   LayoutDashboard,
   Box,
   Truck,
-  HelpCircle,
-  LogOut,
-  ChevronDown
+  ChevronDown,
+  AlertTriangle,
+  Anchor,
 } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
 import './Sidebar.css';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Tổng quan', path: '/' },
-  { 
-    icon: Box, 
-    label: 'Điều độ bãi & Tối ưu hóa', 
+  {
+    icon: Box,
+    label: 'Điều độ bãi & Tối ưu hóa',
     path: '#',
     subItems: [
-        { label: 'Sơ đồ 3D trực quan', path: '/3d' },
-        { label: 'Sơ đồ mặt phẳng', path: '/2d' }
-    ]
+      { label: 'Sơ đồ 3D trực quan', path: '/3d' },
+      { label: 'Sơ đồ mặt phẳng', path: '/2d' },
+    ],
   },
   { icon: Truck, label: 'Quản lý hạ bãi', path: '/ha-bai' },
   { icon: Truck, label: 'Quản lý xuất bãi', path: '/xuat-bai' },
   { icon: Box, label: 'Quản lý Kho & Container', path: '/kho' },
+  { icon: AlertTriangle, label: 'Kiểm soát & Sự cố', path: '/kiem-soat' },
 ];
 
 export function Sidebar() {
@@ -32,9 +33,13 @@ export function Sidebar() {
     <aside className="sidebar">
       <div className="sidebar-header">
         <div className="logo-placeholder">
-          {/* Logo Box matching Figma */}
-          <div className="logo-icon"></div>
-          <h2>Warehouse</h2>
+          <div className="logo-icon">
+            <Anchor size={18} strokeWidth={2.5} />
+          </div>
+          <div className="logo-text">
+            <span className="logo-name">Hùng Thủy</span>
+            <span className="logo-sub">Port Logistics</span>
+          </div>
         </div>
       </div>
 
@@ -43,13 +48,20 @@ export function Sidebar() {
           {navItems.map((item, index) => {
             const Icon = item.icon;
             const hasSub = !!item.subItems;
-            const isSubActive = hasSub && item.subItems?.some(sub => location.pathname === sub.path);
-            
+            const isSubActive =
+              hasSub && item.subItems?.some((sub) => location.pathname === sub.path);
+
             return (
               <li key={index} className="nav-item">
-                <NavLink 
-                    to={item.path} 
-                    className={({ isActive }) => (isActive && !hasSub ? 'active-link' : (isSubActive ? 'parent-active' : ''))}
+                <NavLink
+                  to={item.path}
+                  className={({ isActive }) =>
+                    isActive && !hasSub
+                      ? 'active-link'
+                      : isSubActive
+                      ? 'parent-active'
+                      : ''
+                  }
                 >
                   <Icon size={20} className="nav-icon" />
                   <span style={{ flex: 1 }}>{item.label}</span>
@@ -60,9 +72,9 @@ export function Sidebar() {
                   <ul className="sub-menu">
                     {item.subItems!.map((sub, sIdx) => (
                       <li key={sIdx}>
-                        <NavLink 
-                            to={sub.path}
-                            className={({ isActive }) => (isActive ? 'sub-active' : '')}
+                        <NavLink
+                          to={sub.path}
+                          className={({ isActive }) => (isActive ? 'sub-active' : '')}
                         >
                           {sub.label}
                         </NavLink>
@@ -77,22 +89,12 @@ export function Sidebar() {
       </nav>
 
       <div className="sidebar-footer">
-        <div className="nav-item">
-          <NavLink to="/help">
-            <HelpCircle size={20} className="nav-icon" />
-            <span>Trợ giúp & Hỗ trợ</span>
-          </NavLink>
-        </div>
-        
         <div className="user-profile">
-          <div className="avatar">N</div>
+          <div className="avatar">P</div>
           <div className="user-info">
-            <p className="user-name">Nguyen Van A</p>
-            <p className="user-role">Quản trị viên</p>
+            <p className="user-name">Phạm Thị Lan</p>
+            <span className="user-role-badge">Vận hành</span>
           </div>
-          <button className="logout-btn">
-            <LogOut size={18} />
-          </button>
         </div>
       </div>
     </aside>

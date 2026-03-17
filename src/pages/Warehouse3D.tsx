@@ -80,8 +80,8 @@ function ImportPanel({ onClose, initialCode }: { onClose: () => void; initialCod
     exportDate: '2026-08-15',
     priority: 'Cao',
   });
-  const [manualZone, setManualZone]      = useState('Zone B');
-  const [manualWarehouse, setManualWH]   = useState('Hàng Khô');
+  const [manualZone, setManualZone]      = useState('Kho Hàng Khô');
+  const [manualWarehouse, setManualWH]   = useState('Zone A');
   const [manualFloor, setManualFloor]    = useState('1');
   const [manualPos, setManualPos]        = useState('CT01');
 
@@ -166,9 +166,9 @@ function ImportPanel({ onClose, initialCode }: { onClose: () => void; initialCod
               <>
                 <div className="rp-manual-title">Điều chỉnh vị trí thủ công</div>
                 {[
-                  { label: 'Khu nhập', value: manualZone, setter: setManualZone, options: ['Zone A','Zone B','Zone C','Zone D'] },
-                  { label: 'Kho nhập', value: manualWarehouse, setter: setManualWH, options: ['Hàng Khô','Hàng Lạnh','Hàng dễ vỡ','Khác'] },
-                  { label: 'Tầng', value: manualFloor, setter: setManualFloor, options: ['1','2','3','4'] },
+                  { label: 'Khu nhập', value: manualZone, setter: setManualZone, options: ['Kho Hàng Lạnh','Kho Hàng Khô','Kho Hàng Dễ Vỡ','Kho Khác'] },
+                  { label: 'Zone', value: manualWarehouse, setter: setManualWH, options: ['Zone A','Zone B','Zone C'] },
+                  { label: 'Tầng', value: manualFloor, setter: setManualFloor, options: ['1','2','3'] },
                 ].map(({ label, value, setter, options }) => (
                   <div key={label} className="rp-field">
                     <label>{label}</label>
@@ -205,7 +205,7 @@ export function Warehouse3D() {
 
   const showCard    = panelMode === null || panelMode === 'zone';
   const showButton  = !showCard;
-  const isPanelOpen = panelMode !== null;
+
 
   function handleZoneClick(zone: ZoneInfo) {
     setSelectedZone(zone);

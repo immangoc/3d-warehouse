@@ -9,7 +9,7 @@
   /* Status Colors */
   --status-cold: #60A5FA;      /* Kho Lạnh */
   --status-dry: #F97316;       /* Kho Khô */
-  --status-fragile: #FACC15;   /* Hàng dễ vỡ */
+  --status-fragile: #EF4444;   /* Hàng hỏng/dễ vỡ */
   --status-other: #9CA3AF;     /* Khác */
 
   /* Neutral Colors */

@@ -1,9 +1,11 @@
 import { ContainerBlock } from './ContainerBlock';
 import type { ContainerStatus } from './ContainerBlock';
+import type { ContainerSize } from './ContainerBlock';
 
-interface StackData {
+interface StackItem {
   id: string;
   status: ContainerStatus;
+  sizeType: ContainerSize;
   position: [number, number, number];
 }
 
@@ -14,56 +16,81 @@ interface ContainerStackProps {
   levels: number;
 }
 
-export function ContainerStack({ position, rows, cols, levels }: ContainerStackProps) {
-  const containers: StackData[] = [];
-  
-  // Container dimensions + gaps
-  const WIDTH = 2.4;
-  const HEIGHT = 2.6;
-  const LENGTH = 6.0;
-  const GAP_X = 0.5;
-  const GAP_Z = 0.5;
-  
-  const statuses: ContainerStatus[] = ['cold', 'dry', 'fragile', 'other'];
+const STATUSES: ContainerStatus[] = ['cold', 'dry', 'fragile', 'other'];
 
-  for (let l = 0; l < levels; l++) {
+// 20ft dimensions
+const WIDTH  = 2.4;
+const HEIGHT = 2.6;
+const LENGTH = 6.0;   // 20ft length
+const GAP_X  = 0.5;
+const GAP_Z  = 0.5;
+
+// 40ft container length exactly spans 2×20ft + their gap
+const LENGTH_40 = 2 * LENGTH + GAP_Z; // = 12.5
+
+export function ContainerStack({ position, rows, cols, levels }: ContainerStackProps) {
+  const containers: StackItem[] = [];
+
+  // Cap maximum stacking at 3 floors
+  const maxLevels = Math.min(levels, 3);
+
+  for (let l = 0; l < maxLevels; l++) {
+    // Track which row-col slots are claimed on this level
+    const occupied = new Set<string>();
+
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
-        // Randomly skip some containers to make it look realistic (not 100% full)
-        if (Math.random() > 0.8) continue;
+        const key = `${r}-${c}`;
+        if (occupied.has(key)) continue;
+        if (Math.random() > 0.8) continue; // ~20% of slots stay empty
 
         const x = c * (WIDTH + GAP_X);
-        const y = l * HEIGHT + HEIGHT/2; 
-        const z = r * (LENGTH + GAP_Z);
+        const y = l * HEIGHT + HEIGHT / 2;
+        const status = STATUSES[Math.floor(Math.random() * STATUSES.length)];
+        const id = `CTN-${l}${r}${c}-${(Math.random() * 9000 + 1000) | 0}`;
 
-        // Randomly assign a status
-        const status = statuses[Math.floor(Math.random() * statuses.length)];
+        // Try to place a 40ft container (~35% of containers)
+        const nextKey = `${r + 1}-${c}`;
+        const can40ft = r + 1 < rows && !occupied.has(nextKey);
+        const is40ft  = can40ft && Math.random() < 0.35;
 
-        containers.push({
-          id: `CTN-${r}${c}${l}-${Math.floor(Math.random()*1000)}`,
-          status,
-          position: [x, y, z]
-        });
+        if (is40ft) {
+          // Center is midway between row r and row r+1 (including the gap)
+          const z = r * (LENGTH + GAP_Z) + (LENGTH + GAP_Z) / 2;
+          containers.push({ id, status, sizeType: '40ft', position: [x, y, z] });
+          occupied.add(key);
+          occupied.add(nextKey);
+        } else {
+          const z = r * (LENGTH + GAP_Z);
+          containers.push({ id, status, sizeType: '20ft', position: [x, y, z] });
+          occupied.add(key);
+        }
       }
     }
   }
 
   return (
     <group position={position}>
-      {/* Optional: Add a subtle base pad for the stack area */}
-      <mesh position={[(cols*(WIDTH+GAP_X))/2 - WIDTH/2, 0.01, (rows*(LENGTH+GAP_Z))/2 - LENGTH/2]} rotation={[-Math.PI / 2, 0, 0]}>
+      {/* Subtle base pad */}
+      <mesh
+        position={[(cols * (WIDTH + GAP_X)) / 2 - WIDTH / 2, 0.01, (rows * (LENGTH + GAP_Z)) / 2 - LENGTH / 2]}
+        rotation={[-Math.PI / 2, 0, 0]}
+      >
         <planeGeometry args={[cols * (WIDTH + GAP_X) + 1, rows * (LENGTH + GAP_Z) + 1]} />
         <meshStandardMaterial color="#E2E8F0" transparent opacity={0.5} />
       </mesh>
 
       {containers.map((ctn) => (
-        <ContainerBlock 
-          key={ctn.id} 
-          id={ctn.id} 
-          position={ctn.position} 
-          status={ctn.status} 
+        <ContainerBlock
+          key={ctn.id}
+          id={ctn.id}
+          position={ctn.position}
+          status={ctn.status}
+          sizeType={ctn.sizeType}
         />
       ))}
     </group>
   );
 }
+
+export { LENGTH_40 };

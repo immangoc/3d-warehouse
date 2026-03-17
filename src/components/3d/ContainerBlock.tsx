@@ -4,7 +4,6 @@ import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 
 export type ContainerStatus = 'cold' | 'dry' | 'fragile' | 'other';
-
 export type ContainerSize = '20ft' | '40ft';
 
 interface ContainerBlockProps {
@@ -15,12 +14,14 @@ interface ContainerBlockProps {
   zone?: string;
   floor?: number;
   slot?: string;
+  selected?: boolean;
+  onClick?: (id: string) => void;
 }
 
 const statusColors: Record<ContainerStatus, string> = {
   cold:    '#60A5FA',
   dry:     '#F97316',
-  fragile: '#EF4444',
+  fragile: '#FACC15',
   other:   '#9CA3AF',
 };
 
@@ -31,24 +32,30 @@ const statusLabel: Record<ContainerStatus, string> = {
   other:   'Khác',
 };
 
-const WIDTH  = 2.4;
-const HEIGHT = 2.6;
+const CONTAINER_WIDTH  = 2.44;
+const CONTAINER_HEIGHT = 2.59;
 
-export function ContainerBlock({ position, status, id, sizeType = '20ft', zone = 'A', floor = 3, slot = 'CT01' }: ContainerBlockProps) {
-  const LENGTH = sizeType === '40ft' ? 12.5 : 6;
+export function ContainerBlock({
+  position, status, id, sizeType = '20ft',
+  zone = 'A', floor = 1, slot = '01',
+  selected = false, onClick,
+}: ContainerBlockProps) {
+  const LENGTH = sizeType === '40ft' ? 12.2 : 6.06;
   const meshRef = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
 
   useFrame((state) => {
-    if (meshRef.current && hovered) {
+    if (!meshRef.current) return;
+    if (hovered) {
       meshRef.current.position.y = position[1] + Math.sin(state.clock.elapsedTime * 4) * 0.08;
-    } else if (meshRef.current) {
+    } else {
       meshRef.current.position.y = THREE.MathUtils.lerp(meshRef.current.position.y, position[1], 0.1);
     }
   });
 
-  const color  = statusColors[status];
-  const vLabel = `Zone ${zone}-kho ${statusLabel[status]}-tầng ${floor}-${slot}`;
+  const color = statusColors[status];
+  const isHighlighted = hovered || selected;
+  const vLabel = `Zone ${zone} - Kho ${statusLabel[status]} - Tầng ${floor} - Vị trí ${slot}`;
 
   return (
     <group position={position}>
@@ -56,19 +63,28 @@ export function ContainerBlock({ position, status, id, sizeType = '20ft', zone =
         ref={meshRef}
         onPointerOver={(e) => { e.stopPropagation(); setHovered(true); }}
         onPointerOut={(e)  => { e.stopPropagation(); setHovered(false); }}
+        onClick={(e) => { e.stopPropagation(); onClick?.(id); }}
       >
-        <boxGeometry args={[WIDTH, HEIGHT, LENGTH]} />
+        <boxGeometry args={[CONTAINER_WIDTH, CONTAINER_HEIGHT, LENGTH]} />
         <meshStandardMaterial
           color={color}
-          emissive={hovered ? color : '#000000'}
-          emissiveIntensity={hovered ? 0.25 : 0}
+          emissive={isHighlighted ? '#ffffff' : '#000000'}
+          emissiveIntensity={isHighlighted ? 0.3 : 0}
           roughness={0.7}
           metalness={0.2}
         />
       </mesh>
 
-      {hovered && (
-        <Html position={[0, HEIGHT / 2 + 1.2, 0]} center style={{ pointerEvents: 'none' }}>
+      {/* Selection outline */}
+      {selected && (
+        <lineSegments>
+          <edgesGeometry args={[new THREE.BoxGeometry(CONTAINER_WIDTH + 0.05, CONTAINER_HEIGHT + 0.05, LENGTH + 0.05)]} />
+          <lineBasicMaterial color="#ffffff" linewidth={2} />
+        </lineSegments>
+      )}
+
+      {(hovered || selected) && (
+        <Html position={[0, CONTAINER_HEIGHT / 2 + 1.2, 0]} center style={{ pointerEvents: 'none' }}>
           <div style={{
             background: '#fff',
             border: '1px solid #E5E7EB',
@@ -79,7 +95,6 @@ export function ContainerBlock({ position, status, id, sizeType = '20ft', zone =
             fontFamily: 'Inter, -apple-system, sans-serif',
             pointerEvents: 'none',
           }}>
-            {/* Icon */}
             <div style={{ textAlign: 'center', marginBottom: '10px' }}>
               <div style={{
                 display: 'inline-flex',
@@ -91,7 +106,7 @@ export function ContainerBlock({ position, status, id, sizeType = '20ft', zone =
                 backgroundColor: '#FFF7ED',
               }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-                  stroke="#F97316" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
                   <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
                   <line x1="12" y1="22.08" x2="12" y2="12"/>
@@ -99,15 +114,13 @@ export function ContainerBlock({ position, status, id, sizeType = '20ft', zone =
               </div>
             </div>
 
-            {/* Info table */}
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
               <tbody>
                 {[
-                  { label: 'Mã số Container:', value: id, style: {} },
-                  { label: 'Hãng tàu:', value: '', style: {} },
+                  { label: 'Mã số Container:', value: id, style: { fontWeight: '700' as const } },
                   { label: 'Loại Container:', value: `${sizeType} - ${statusLabel[status]}`, style: {} },
-                  { label: 'Trạng thái:', value: 'Lưu kho', style: { color: '#F97316', fontWeight: '600' } },
-                  { label: 'Vị trí:', value: vLabel, style: { fontWeight: '700', color: '#111827' } },
+                  { label: 'Trạng thái:', value: 'Lưu kho', style: { color: '#F97316', fontWeight: '600' as const } },
+                  { label: 'Vị trí:', value: vLabel, style: { fontWeight: '700' as const, color: '#111827' } },
                   { label: 'Ngày nhập bãi:', value: '20/01/2026', style: {} },
                   { label: 'Thời gian lưu kho:', value: '2 tháng', style: {} },
                 ].map(({ label, value, style }) => (

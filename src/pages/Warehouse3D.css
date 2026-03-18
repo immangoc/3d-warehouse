@@ -197,6 +197,50 @@
   flex-shrink: 0;
 }
 
+/* ── Warehouse type tabs ──────────────────────────────────────────────────── */
+.w3d-wh-tabs {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.w3d-wh-tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.w3d-wh-tab:hover {
+  border-color: var(--tab-color, var(--color-primary));
+  color: var(--tab-color, var(--color-primary));
+  background: #fff;
+}
+
+.w3d-wh-tab-active {
+  background: var(--tab-color, var(--color-primary));
+  border-color: var(--tab-color, var(--color-primary));
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+
+.w3d-wh-tab-active:hover {
+  background: var(--tab-color, var(--color-primary));
+  border-color: var(--tab-color, var(--color-primary));
+  color: #fff;
+}
+
 /* ── Content row ──────────────────────────────────────────────────────────── */
 .w3d-content-row {
   display: flex;

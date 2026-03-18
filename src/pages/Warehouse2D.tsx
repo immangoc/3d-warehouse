@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
   Search, Plus, ChevronLeft, ChevronRight,
   Snowflake, Package, AlertTriangle, Layers,
-  Thermometer, Truck, Calendar,
+  Thermometer, Truck, Calendar, Info,
 } from 'lucide-react';
 import { DashboardLayout } from '../components/layout/DashboardLayout';
 import './Warehouse2D.css';
@@ -16,21 +16,23 @@ interface WHConfig {
   name: string;
   color: string;
   bgColor: string;
+  emptyColor: string;
+  emptyBorder: string;
   totalFloors: number;
   hasTemp?: boolean;
   temp?: string;
 }
 
 const WAREHOUSES: WHConfig[] = [
-  { id: 'cold',    name: 'Kho Lạnh',       color: '#3B82F6', bgColor: '#EFF6FF', totalFloors: 3, hasTemp: true, temp: '18 độ C' },
-  { id: 'dry',     name: 'Kho Khô',         color: '#F97316', bgColor: '#FFF7ED', totalFloors: 3 },
-  { id: 'fragile', name: 'Kho Hàng dễ vỡ', color: '#EF4444', bgColor: '#FEF2F2', totalFloors: 3 },
-  { id: 'other',   name: 'Kho khác',        color: '#9CA3AF', bgColor: '#F9FAFB', totalFloors: 3 },
+  { id: 'cold',    name: 'Kho Lạnh',       color: '#3B82F6', bgColor: '#EFF6FF', emptyColor: '#DBEAFE', emptyBorder: '#BFDBFE', totalFloors: 3, hasTemp: true, temp: '18 độ C' },
+  { id: 'dry',     name: 'Kho Khô',         color: '#F97316', bgColor: '#FFF7ED', emptyColor: '#FED7AA', emptyBorder: '#FDBA74', totalFloors: 3 },
+  { id: 'fragile', name: 'Kho Hàng dễ vỡ', color: '#EF4444', bgColor: '#FEF2F2', emptyColor: '#FECACA', emptyBorder: '#FCA5A5', totalFloors: 3 },
+  { id: 'other',   name: 'Kho khác',        color: '#9CA3AF', bgColor: '#F9FAFB', emptyColor: '#E5E7EB', emptyBorder: '#D1D5DB', totalFloors: 3 },
 ];
 
-// Deterministic grid: 5 rows × 8 cols
+// ─── Grid generation (6 rows × 10 cols) ──────────────────────────────────────
 function makeGrid(seed: number): boolean[][] {
-  const rows = 5, cols = 8;
+  const rows = 6, cols = 10;
   const seededRandom = (n: number) => {
     const x = Math.sin(n + seed) * 10000;
     return x - Math.floor(x);
@@ -38,7 +40,10 @@ function makeGrid(seed: number): boolean[][] {
   let idx = 0;
   return Array.from({ length: rows }, () =>
     Array.from({ length: cols }, (_, c) => {
-      const rate = c < 4 ? 0.97 : Math.max(0, 0.93 - (c - 3) * (seed * 0.3 + 0.1));
+      const isLeft = c < 4;
+      const rate = isLeft
+        ? 0.97
+        : Math.max(0, 0.90 - Math.floor((c - 4) / 2) * (seed * 0.12 + 0.04));
       return seededRandom(idx++) < rate;
     })
   );
@@ -55,39 +60,79 @@ function getGrid(whId: string, zone: string): boolean[][] {
   return GRID_CACHE[key];
 }
 
-// ─── Slot grid ────────────────────────────────────────────────────────────────
-function SlotGrid({ grid, color, highlighted }: {
-  grid: boolean[][];
+// ─── Rack rendering ──────────────────────────────────────────────────────────
+// A "rack" is a 2-col × 3-row visual block of container slots
+function Rack({ rows, colStart, color, emptyColor, highlighted }: {
+  rows: boolean[][];
+  colStart: number;
   color: string;
+  emptyColor: string;
   highlighted?: { row: number; col: number } | null;
 }) {
   return (
-    <div className="slot-area">
-      {(['left', 'right'] as const).map((side) => {
-        const start = side === 'left' ? 0 : 4;
-        return (
-          <div key={side} className="slot-block">
-            {grid.map((row, ri) => (
-              <div key={ri} className="slot-row">
-                {row.slice(start, start + 4).map((filled, ci) => {
-                  const absCol = start + ci;
-                  const isHL = highlighted?.row === ri && highlighted?.col === absCol;
-                  return (
-                    <div
-                      key={ci}
-                      className={`slot ${filled ? 'slot-filled' : 'slot-empty'} ${isHL ? 'slot-hl' : ''}`}
-                      style={{
-                        backgroundColor: isHL ? `${color}26` : filled ? color : '#E5E7EB',
-                        border: isHL ? `2px solid ${color}` : '2px solid transparent',
-                        color: filled ? '#fff' : isHL ? color : '#9CA3AF',
-                      }}
-                    >
-                      CT01
-                    </div>
-                  );
-                })}
+    <div className="rack">
+      {rows.map((row, ri) => (
+        <div key={ri} className="rack-row">
+          {[0, 1].map((ci) => {
+            const absCol = colStart + ci;
+            const filled = row[absCol];
+            const isHL = highlighted?.row === ri && highlighted?.col === absCol;
+            return (
+              <div
+                key={ci}
+                className={`slot ${filled ? 'slot-filled' : 'slot-empty'} ${isHL ? 'slot-hl' : ''}`}
+                style={{
+                  backgroundColor: isHL
+                    ? `${color}20`
+                    : filled
+                      ? color
+                      : emptyColor,
+                  borderColor: isHL ? color : 'transparent',
+                  color: filled ? '#fff' : color,
+                }}
+              >
+                CT01
               </div>
-            ))}
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SlotGrid({ grid, color, emptyColor, highlighted }: {
+  grid: boolean[][];
+  color: string;
+  emptyColor: string;
+  highlighted?: { row: number; col: number } | null;
+}) {
+  // Split into 2 row groups of 3 rows each
+  const rowGroups = [grid.slice(0, 3), grid.slice(3, 6)];
+
+  // Column pairs for racks: left block [0-1, 2-3], right block [4-5, 6-7, 8-9]
+  const leftPairs = [0, 2];
+  const rightPairs = [4, 6, 8];
+
+  return (
+    <div className="rack-area">
+      {rowGroups.map((rg, gi) => {
+        const hlInGroup = highlighted && (gi === 0 ? highlighted.row < 3 : highlighted.row >= 3)
+          ? { row: highlighted.row - gi * 3, col: highlighted.col }
+          : null;
+        return (
+          <div key={gi} className="rack-row-group">
+            <div className="rack-block">
+              {leftPairs.map((cs) => (
+                <Rack key={cs} rows={rg} colStart={cs} color={color} emptyColor={emptyColor} highlighted={hlInGroup} />
+              ))}
+            </div>
+            <div className="rack-gap" />
+            <div className="rack-block">
+              {rightPairs.map((cs) => (
+                <Rack key={cs} rows={rg} colStart={cs} color={color} emptyColor={emptyColor} highlighted={hlInGroup} />
+              ))}
+            </div>
           </div>
         );
       })}
@@ -147,7 +192,7 @@ function WarehouseCard({ wh, floor, highlight }: {
           onClick={() => setZoneIdx((i) => (i - 1 + ZONES.length) % ZONES.length)}>
           <ChevronLeft size={15} />
         </button>
-        <SlotGrid grid={grid} color={wh.color} highlighted={highlight} />
+        <SlotGrid grid={grid} color={wh.color} emptyColor={wh.emptyColor} highlighted={highlight} />
         <button className="wh-nav-btn"
           onClick={() => setZoneIdx((i) => (i + 1) % ZONES.length)}>
           <ChevronRight size={15} />
@@ -163,7 +208,7 @@ function WarehouseCard({ wh, floor, highlight }: {
 }
 
 // ─── Panels ───────────────────────────────────────────────────────────────────
-const WAITING = ['CTN-2026-1234', 'CTN-2026-1235'];
+const WAITING = ['CTN-2026-1234', 'CTN-2026-1234'];
 
 function WaitingListPanel({ onClose, onSelect }: {
   onClose: () => void;
@@ -176,8 +221,8 @@ function WaitingListPanel({ onClose, onSelect }: {
         <h2 className="rp-import-title">Container chờ nhập</h2>
       </div>
       <div className="rp-import-body">
-        {WAITING.map((code) => (
-          <button key={code} className="waiting-item" onClick={() => onSelect(code)}>
+        {WAITING.map((code, idx) => (
+          <button key={idx} className="waiting-item" onClick={() => onSelect(code)}>
             <div className="waiting-icon"><Truck size={18} /></div>
             <span className="waiting-code">{code}</span>
           </button>
@@ -239,20 +284,20 @@ function ImportPanel({ onClose, initialCode }: { onClose: () => void; initialCod
           <>
             <div className="rp-suggestion-card">
               <div className="rp-sug-header">
-                <div className="rp-sug-icon"><Package size={16} /></div>
+                <div className="rp-sug-icon"><Info size={16} /></div>
                 <span className="rp-sug-title">Gợi ý vị trí</span>
               </div>
               <div className="rp-sug-row">
-                <span>Vị trí</span>
+                <span className="rp-sug-label">Vị trí</span>
                 <span className="rp-sug-value rp-blue">Zone B - Kho Khô<br />Tầng 3 - CT01</span>
               </div>
               <div className="rp-sug-row">
-                <span>Hiệu quả tối ưu</span>
-                <span className="rp-sug-value rp-green">94%</span>
+                <span className="rp-sug-label">Hiệu quả tối ưu</span>
+                <span className="rp-sug-value rp-blue">94%</span>
               </div>
               <div className="rp-sug-row">
-                <span>Số Container đảo chuyển</span>
-                <span className="rp-sug-value rp-green">0</span>
+                <span className="rp-sug-label">Số Container<br />đảo chuyển</span>
+                <span className="rp-sug-value rp-blue">0</span>
               </div>
             </div>
             <button className="btn-primary rp-submit-btn">Xác nhận nhập</button>
@@ -302,11 +347,11 @@ export function Warehouse2D() {
             </button>
           )}
           <div className="w2d-spacer" />
-          <div className="w3d-search">
-            <Search size={15} className="w3d-search-icon" />
+          <div className="w2d-search">
+            <Search size={15} className="w2d-search-icon" />
             <input type="text" placeholder="Nhập mã số Container..." />
           </div>
-          <button className="btn-primary w3d-import-btn" onClick={() => setPanelMode('import')}>
+          <button className="btn-primary w2d-import-btn" onClick={() => setPanelMode('import')}>
             <Plus size={17} /><span>Nhập/Xuất</span>
           </button>
         </div>

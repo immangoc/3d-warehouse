@@ -120,6 +120,7 @@ function Slot({ info, color, emptyColor, isHL, onClickSlot }: {
 
 // ─── Rack rendering ──────────────────────────────────────────────────────────
 // A "rack" is a 2-col × 2-row visual block of container slots
+// For 40ft: containers are stacked vertically (1 per row)
 function Rack({ rows, colStart, color, emptyColor, highlighted, is40ft, seedBase, onClickSlot }: {
   rows: boolean[][];
   colStart: number;
@@ -130,6 +131,27 @@ function Rack({ rows, colStart, color, emptyColor, highlighted, is40ft, seedBase
   seedBase: number;
   onClickSlot?: (info: SlotInfo) => void;
 }) {
+  if (is40ft) {
+    // Vertical layout: each container on its own row
+    const slots: { ri: number; ci: number }[] = [];
+    rows.forEach((_, ri) => {
+      [0, 1].forEach((ci) => slots.push({ ri, ci }));
+    });
+    return (
+      <div className="rack rack-vertical">
+        {slots.map(({ ri, ci }, idx) => {
+          const absCol = colStart + ci;
+          const filled = rows[ri][absCol];
+          const isHL = highlighted?.row === ri && highlighted?.col === absCol;
+          const info = getSlotInfo(filled, is40ft, seedBase + ri * 10 + absCol);
+          return (
+            <Slot key={idx} info={info} color={color} emptyColor={emptyColor} isHL={isHL} onClickSlot={onClickSlot} />
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
     <div className="rack">
       {rows.map((row, ri) => (

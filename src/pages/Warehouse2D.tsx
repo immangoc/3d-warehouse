@@ -30,9 +30,9 @@ const WAREHOUSES: WHConfig[] = [
   { id: 'other',   name: 'Kho khác',        color: '#9CA3AF', bgColor: '#F9FAFB', emptyColor: '#E5E7EB', emptyBorder: '#D1D5DB', totalFloors: 3 },
 ];
 
-// ─── Grid generation (4 rows × 8 cols) ───────────────────────────────────────
+// ─── Grid generation (4 rows × 6 cols: 4×20ft + 2×40ft) ─────────────────────
 function makeGrid(seed: number): boolean[][] {
-  const rows = 4, cols = 8;
+  const rows = 4, cols = 6;
   const seededRandom = (n: number) => {
     const x = Math.sin(n + seed) * 10000;
     return x - Math.floor(x);
@@ -160,9 +160,9 @@ function SlotGrid({ grid, color, emptyColor, highlighted, animDir, onClickSlot }
   // Split into 2 row groups of 2 rows each
   const rowGroups = [grid.slice(0, 2), grid.slice(2, 4)];
 
-  // Column pairs for racks: left block [0-1, 2-3], right block [4-5, 6-7]
+  // Column pairs for racks: left block [0-1, 2-3] (20ft), right block [4-5] (40ft)
   const leftPairs = [0, 2];
-  const rightPairs = [4, 6];
+  const rightPairs = [4];
 
   const animClass = animDir === 'left' ? 'rack-slide-left' : animDir === 'right' ? 'rack-slide-right' : '';
 

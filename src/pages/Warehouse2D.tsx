@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
-  Search, Plus, ChevronLeft, ChevronRight,
+  Search, Plus, ChevronLeft, ChevronRight, ChevronDown,
   Snowflake, Package, AlertTriangle, Layers,
-  Thermometer, Truck, Calendar, Info,
+  Thermometer, Truck, Calendar, Info, X,
 } from 'lucide-react';
 import { DashboardLayout } from '../components/layout/DashboardLayout';
 import './Warehouse2D.css';
@@ -60,14 +60,75 @@ function getGrid(whId: string, zone: string): boolean[][] {
   return GRID_CACHE[key];
 }
 
+// ─── Container detail data ───────────────────────────────────────────────────
+interface SlotInfo {
+  filled: boolean;
+  label: string;
+  type: '20ft' | '40ft';
+  cargo?: string;
+  weight?: string;
+  temp?: string;
+}
+
+function getSlotInfo(filled: boolean, is40ft: boolean, seed: number): SlotInfo {
+  const cargos = ['Thủy sản', 'Thịt đông lạnh', 'Rau củ', 'Trái cây', 'Kem', 'Sữa'];
+  const sr = (n: number) => { const x = Math.sin(n + seed) * 10000; return x - Math.floor(x); };
+  return {
+    filled,
+    label: 'CT01',
+    type: is40ft ? '40ft' : '20ft',
+    cargo: filled ? cargos[Math.floor(sr(seed + 1) * cargos.length)] : undefined,
+    weight: filled ? `${Math.floor(sr(seed + 2) * 20 + 5)} tấn` : undefined,
+    temp: filled ? `${Math.floor(sr(seed + 3) * 10 - 5)}°C` : undefined,
+  };
+}
+
+// ─── Slot with tooltip ──────────────────────────────────────────────────────
+function Slot({ info, color, emptyColor, isHL, onClickSlot }: {
+  info: SlotInfo;
+  color: string;
+  emptyColor: string;
+  isHL: boolean;
+  onClickSlot?: (info: SlotInfo) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div className="slot-wrapper">
+      <div
+        className={`slot ${info.type === '40ft' ? 'slot-40' : 'slot-20'} ${info.filled ? 'slot-filled' : 'slot-empty'} ${isHL ? 'slot-hl' : ''}`}
+        style={{
+          backgroundColor: isHL ? `${color}20` : info.filled ? color : emptyColor,
+          borderColor: isHL ? color : 'transparent',
+          color: info.filled ? '#fff' : color,
+        }}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        onClick={() => onClickSlot?.(info)}
+      >
+        {info.label}
+      </div>
+      {hovered && info.filled && (
+        <div className="slot-tooltip">
+          <div className="slot-tooltip-row"><strong>{info.cargo}</strong></div>
+          <div className="slot-tooltip-row">{info.weight} · {info.temp}</div>
+          <div className="slot-tooltip-row">{info.type} container</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Rack rendering ──────────────────────────────────────────────────────────
 // A "rack" is a 2-col × 2-row visual block of container slots
-function Rack({ rows, colStart, color, emptyColor, highlighted }: {
+function Rack({ rows, colStart, color, emptyColor, highlighted, is40ft, seedBase, onClickSlot }: {
   rows: boolean[][];
   colStart: number;
   color: string;
   emptyColor: string;
   highlighted?: { row: number; col: number } | null;
+  is40ft: boolean;
+  seedBase: number;
+  onClickSlot?: (info: SlotInfo) => void;
 }) {
   return (
     <div className="rack">
@@ -77,22 +138,9 @@ function Rack({ rows, colStart, color, emptyColor, highlighted }: {
             const absCol = colStart + ci;
             const filled = row[absCol];
             const isHL = highlighted?.row === ri && highlighted?.col === absCol;
+            const info = getSlotInfo(filled, is40ft, seedBase + ri * 10 + absCol);
             return (
-              <div
-                key={ci}
-                className={`slot ${filled ? 'slot-filled' : 'slot-empty'} ${isHL ? 'slot-hl' : ''}`}
-                style={{
-                  backgroundColor: isHL
-                    ? `${color}20`
-                    : filled
-                      ? color
-                      : emptyColor,
-                  borderColor: isHL ? color : 'transparent',
-                  color: filled ? '#fff' : color,
-                }}
-              >
-                CT01
-              </div>
+              <Slot key={ci} info={info} color={color} emptyColor={emptyColor} isHL={isHL} onClickSlot={onClickSlot} />
             );
           })}
         </div>
@@ -101,11 +149,13 @@ function Rack({ rows, colStart, color, emptyColor, highlighted }: {
   );
 }
 
-function SlotGrid({ grid, color, emptyColor, highlighted }: {
+function SlotGrid({ grid, color, emptyColor, highlighted, animDir, onClickSlot }: {
   grid: boolean[][];
   color: string;
   emptyColor: string;
   highlighted?: { row: number; col: number } | null;
+  animDir?: 'left' | 'right' | null;
+  onClickSlot?: (info: SlotInfo) => void;
 }) {
   // Split into 2 row groups of 2 rows each
   const rowGroups = [grid.slice(0, 2), grid.slice(2, 4)];
@@ -114,8 +164,10 @@ function SlotGrid({ grid, color, emptyColor, highlighted }: {
   const leftPairs = [0, 2];
   const rightPairs = [4, 6];
 
+  const animClass = animDir === 'left' ? 'rack-slide-left' : animDir === 'right' ? 'rack-slide-right' : '';
+
   return (
-    <div className="rack-area">
+    <div className={`rack-area ${animClass}`}>
       {rowGroups.map((rg, gi) => {
         const hlInGroup = highlighted && (gi === 0 ? highlighted.row < 2 : highlighted.row >= 2)
           ? { row: highlighted.row - gi * 2, col: highlighted.col }
@@ -124,13 +176,13 @@ function SlotGrid({ grid, color, emptyColor, highlighted }: {
           <div key={gi} className="rack-row-group">
             <div className="rack-block">
               {leftPairs.map((cs) => (
-                <Rack key={cs} rows={rg} colStart={cs} color={color} emptyColor={emptyColor} highlighted={hlInGroup} />
+                <Rack key={cs} rows={rg} colStart={cs} color={color} emptyColor={emptyColor} highlighted={hlInGroup} is40ft={false} seedBase={gi * 100 + cs} onClickSlot={onClickSlot} />
               ))}
             </div>
             <div className="rack-gap" />
             <div className="rack-block">
               {rightPairs.map((cs) => (
-                <Rack key={cs} rows={rg} colStart={cs} color={color} emptyColor={emptyColor} highlighted={hlInGroup} />
+                <Rack key={cs} rows={rg} colStart={cs} color={color} emptyColor={emptyColor} highlighted={hlInGroup} is40ft={true} seedBase={gi * 100 + cs + 50} onClickSlot={onClickSlot} />
               ))}
             </div>
           </div>
@@ -164,6 +216,48 @@ function StatCard({ wh }: { wh: WHConfig }) {
   );
 }
 
+// ─── Container detail modal ──────────────────────────────────────────────────
+function ContainerModal({ info, onClose }: { info: SlotInfo; onClose: () => void }) {
+  return (
+    <div className="slot-modal-overlay" onClick={onClose}>
+      <div className="slot-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="slot-modal-header">
+          <h3>Container {info.label}</h3>
+          <button className="slot-modal-close" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="slot-modal-body">
+          <div className="slot-modal-row">
+            <span className="slot-modal-label">Loại</span>
+            <span className="slot-modal-value">{info.type}</span>
+          </div>
+          <div className="slot-modal-row">
+            <span className="slot-modal-label">Trạng thái</span>
+            <span className={`slot-modal-badge ${info.filled ? 'badge-active' : 'badge-inactive'}`}>
+              {info.filled ? 'Hoạt động' : 'Trống'}
+            </span>
+          </div>
+          {info.filled && (
+            <>
+              <div className="slot-modal-row">
+                <span className="slot-modal-label">Hàng hóa</span>
+                <span className="slot-modal-value">{info.cargo}</span>
+              </div>
+              <div className="slot-modal-row">
+                <span className="slot-modal-label">Trọng lượng</span>
+                <span className="slot-modal-value">{info.weight}</span>
+              </div>
+              <div className="slot-modal-row">
+                <span className="slot-modal-label">Nhiệt độ</span>
+                <span className="slot-modal-value">{info.temp}</span>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Warehouse card ───────────────────────────────────────────────────────────
 function WarehouseCard({ wh, floor, highlight }: {
   wh: WHConfig;
@@ -171,7 +265,26 @@ function WarehouseCard({ wh, floor, highlight }: {
   highlight?: { row: number; col: number } | null;
 }) {
   const [zoneIdx, setZoneIdx] = useState(0);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [animDir, setAnimDir] = useState<'left' | 'right' | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<SlotInfo | null>(null);
   const grid = getGrid(wh.id, ZONES[zoneIdx]);
+
+  const navigateZone = useCallback((dir: 'left' | 'right') => {
+    setAnimDir(dir);
+    setZoneIdx((i) => dir === 'left'
+      ? (i - 1 + ZONES.length) % ZONES.length
+      : (i + 1) % ZONES.length
+    );
+    setTimeout(() => setAnimDir(null), 300);
+  }, []);
+
+  const selectZone = useCallback((idx: number) => {
+    setAnimDir('right');
+    setZoneIdx(idx);
+    setDropdownOpen(false);
+    setTimeout(() => setAnimDir(null), 300);
+  }, []);
 
   return (
     <div className="wh-card">
@@ -183,18 +296,34 @@ function WarehouseCard({ wh, floor, highlight }: {
         <span className="wh-active" style={{ color: wh.color }}>Active</span>
       </div>
 
-      <button className="wh-zone-selector" style={{ color: wh.color }}>
-        {ZONES[zoneIdx]} <ChevronRight size={13} style={{ transform: 'rotate(90deg)', display: 'inline' }} />
-      </button>
+      <div className="wh-divider" />
+
+      <div className="wh-zone-wrap">
+        <button className="wh-zone-selector" style={{ color: wh.color }} onClick={() => setDropdownOpen(!dropdownOpen)}>
+          {ZONES[zoneIdx]} <ChevronDown size={13} className={`wh-zone-chevron ${dropdownOpen ? 'wh-zone-chevron-open' : ''}`} />
+        </button>
+        {dropdownOpen && (
+          <div className="wh-zone-dropdown">
+            {ZONES.map((z, i) => (
+              <button
+                key={z}
+                className={`wh-zone-option ${i === zoneIdx ? 'wh-zone-option-active' : ''}`}
+                style={{ '--wh-color': wh.color } as React.CSSProperties}
+                onClick={() => selectZone(i)}
+              >
+                {z}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="wh-grid-area">
-        <button className="wh-nav-btn"
-          onClick={() => setZoneIdx((i) => (i - 1 + ZONES.length) % ZONES.length)}>
+        <button className="wh-nav-btn" onClick={() => navigateZone('left')}>
           <ChevronLeft size={15} />
         </button>
-        <SlotGrid grid={grid} color={wh.color} emptyColor={wh.emptyColor} highlighted={highlight} />
-        <button className="wh-nav-btn"
-          onClick={() => setZoneIdx((i) => (i + 1) % ZONES.length)}>
+        <SlotGrid grid={grid} color={wh.color} emptyColor={wh.emptyColor} highlighted={highlight} animDir={animDir} onClickSlot={setSelectedSlot} />
+        <button className="wh-nav-btn" onClick={() => navigateZone('right')}>
           <ChevronRight size={15} />
         </button>
       </div>
@@ -203,6 +332,8 @@ function WarehouseCard({ wh, floor, highlight }: {
         <div className="wh-footer-item"><Layers size={13} /><span>Tầng {floor}/{wh.totalFloors}</span></div>
         {wh.hasTemp && <div className="wh-footer-item"><Thermometer size={13} /><span>{wh.temp}</span></div>}
       </div>
+
+      {selectedSlot && <ContainerModal info={selectedSlot} onClose={() => setSelectedSlot(null)} />}
     </div>
   );
 }

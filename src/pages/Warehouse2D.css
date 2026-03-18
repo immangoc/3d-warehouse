@@ -94,7 +94,7 @@
 
 .w2d-spacer { flex: 1; }
 
-/* Container card — shared style */
+/* Container card */
 .ctn-card {
   display: flex;
   align-items: center;
@@ -131,9 +131,8 @@
 .ctn-card-sub    { font-size: 11.5px; color: var(--color-text-muted); white-space: nowrap; }
 .ctn-card-chevron{ color: var(--color-text-muted); flex-shrink: 0; }
 
-/* Search (shared via w3d-search class defined in Warehouse3D.css)
-   Redeclare here for standalone use */
-.w3d-search {
+/* Search */
+.w2d-search {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -144,18 +143,18 @@
   width: 240px;
   transition: border-color 0.15s;
 }
-.w3d-search:focus-within {
+.w2d-search:focus-within {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.1);
 }
-.w3d-search-icon { color: #9CA3AF; flex-shrink: 0; }
-.w3d-search input {
+.w2d-search-icon { color: #9CA3AF; flex-shrink: 0; }
+.w2d-search input {
   border: none; background: transparent; outline: none;
   width: 100%; font-size: 13.5px; color: var(--color-text-primary); font-family: inherit;
 }
-.w3d-search input::placeholder { color: #9CA3AF; }
+.w2d-search input::placeholder { color: #9CA3AF; }
 
-.w3d-import-btn {
+.w2d-import-btn {
   display: flex;
   align-items: center;
   gap: 7px;
@@ -262,38 +261,57 @@
   color: var(--color-primary);
 }
 
-/* ── Slot grid ───────────────────────────────────────────────────────────── */
-.slot-area {
-  display: flex;
-  gap: 8px;
-  flex: 1;
-  justify-content: center;
-  overflow: hidden;
-}
-
-.slot-block {
+/* ── Rack-based slot grid ─────────────────────────────────────────────────── */
+.rack-area {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 10px;
+  flex: 1;
+  overflow: hidden;
+  align-items: center;
 }
 
-.slot-row {
+.rack-row-group {
   display: flex;
-  gap: 4px;
+  gap: 0;
+  align-items: flex-start;
+}
+
+.rack-block {
+  display: flex;
+  gap: 3px;
+}
+
+.rack-gap {
+  width: 10px;
+  flex-shrink: 0;
+}
+
+.rack {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.rack-row {
+  display: flex;
+  gap: 3px;
 }
 
 .slot {
   width: 36px;
-  height: 32px;
-  border-radius: 5px;
+  height: 30px;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 8.5px;
+  font-size: 8px;
   font-weight: 700;
   transition: transform 0.1s;
   box-sizing: border-box;
   flex-shrink: 0;
+  border: 2px solid transparent;
+  letter-spacing: 0.2px;
 }
 
 .slot-filled { cursor: pointer; }
@@ -466,6 +484,7 @@
   display: flex; justify-content: space-between; align-items: flex-start;
   gap: 8px; font-size: 12.5px; color: var(--color-text-secondary);
 }
+.rp-sug-label { color: var(--color-text-muted); }
 .rp-sug-value { font-weight: 600; font-size: 12.5px; text-align: right; }
 .rp-blue  { color: var(--color-primary); }
 .rp-green { color: #16A34A; }
@@ -498,13 +517,13 @@
 
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 @media (max-width: 1200px) {
-  .slot { width: 32px; height: 28px; font-size: 8px; }
+  .slot { width: 32px; height: 26px; font-size: 7.5px; }
   .w2d-right-panel { width: 260px; }
 }
 
 @media (max-width: 1024px) {
   .w2d-stat-row { grid-template-columns: repeat(2, 1fr); }
-  .w3d-search { width: 200px; }
+  .w2d-search { width: 200px; }
 }
 
 @media (max-width: 900px) {
@@ -522,5 +541,5 @@
   .w2d-action-bar { flex-wrap: wrap; gap: 8px; }
   .ctn-card { width: 100%; }
   .w2d-spacer { display: none; }
-  .slot { width: 26px; height: 24px; font-size: 7.5px; }
+  .slot { width: 24px; height: 22px; font-size: 7px; }
 }

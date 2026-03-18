@@ -5,7 +5,6 @@ import {
   ChevronDown,
   AlertTriangle,
   Anchor,
-  Snowflake,
 } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
 import './Sidebar.css';
@@ -19,7 +18,6 @@ const navItems = [
     subItems: [
       { label: 'Sơ đồ 3D trực quan', path: '/3d' },
       { label: 'Sơ đồ mặt phẳng', path: '/2d' },
-      { label: 'Dashboard Kho Lạnh', path: '/cold-storage' },
     ],
   },
   { icon: Truck, label: 'Quản lý hạ bãi', path: '/ha-bai' },

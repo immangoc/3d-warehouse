@@ -5,14 +5,13 @@ import {
 } from 'lucide-react';
 import { DashboardLayout } from '../components/layout/DashboardLayout';
 import { WarehouseScene } from '../components/3d/WarehouseScene';
-import type { ZoneInfo, SceneHandle } from '../components/3d/WarehouseScene';
+import type { ZoneInfo, SceneHandle, WHType } from '../components/3d/WarehouseScene';
+import { WH_CONFIG } from '../components/3d/WarehouseScene';
 import { Legend } from '../components/ui/Legend';
 import './Warehouse3D.css';
 
 // ─── Types & Data ─────────────────────────────────────────────────────────────
-type WHType = 'cold' | 'dry' | 'fragile' | 'other';
-
-interface WHConfig {
+interface WHTab {
   id: WHType;
   name: string;
   color: string;
@@ -21,7 +20,7 @@ interface WHConfig {
   empty: number;
 }
 
-const WAREHOUSES: WHConfig[] = [
+const WH_TABS: WHTab[] = [
   { id: 'cold',    name: 'Kho Lạnh',       color: '#3B82F6', bgColor: '#EFF6FF', pct: '65%',   empty: 25 },
   { id: 'dry',     name: 'Kho Khô',        color: '#F97316', bgColor: '#FFF7ED', pct: '80%',   empty: 12 },
   { id: 'fragile', name: 'Kho Hàng dễ vỡ', color: '#EF4444', bgColor: '#FEF2F2', pct: '45%',   empty: 18 },
@@ -37,7 +36,7 @@ function WHIcon({ type, size = 18 }: { type: WHType; size?: number }) {
 }
 
 // ─── Stat card ────────────────────────────────────────────────────────────────
-function StatCard({ wh }: { wh: WHConfig }) {
+function StatCard({ wh }: { wh: WHTab }) {
   return (
     <div className="stat-card">
       <div className="stat-left">
@@ -208,9 +207,9 @@ function ImportPanel({ onClose, initialCode }: { onClose: () => void; initialCod
               <>
                 <div className="rp-manual-title">Điều chỉnh vị trí thủ công</div>
                 {[
-                  { label: 'Khu nhập', value: manualZone, setter: setManualZone, options: ['Zone A','Zone B','Zone C','Zone D'] },
+                  { label: 'Khu nhập', value: manualZone, setter: setManualZone, options: ['Zone A','Zone B','Zone C'] },
                   { label: 'Kho nhập', value: manualWarehouse, setter: setManualWH, options: ['Hàng Khô','Hàng Lạnh','Hàng dễ vỡ','Khác'] },
-                  { label: 'Tầng', value: manualFloor, setter: setManualFloor, options: ['1','2','3','4'] },
+                  { label: 'Tầng', value: manualFloor, setter: setManualFloor, options: ['1','2','3'] },
                 ].map(({ label, value, setter, options }) => (
                   <div key={label} className="rp-field">
                     <label>{label}</label>
@@ -240,9 +239,10 @@ function ImportPanel({ onClose, initialCode }: { onClose: () => void; initialCod
 type PanelMode = null | 'zone' | 'waiting-list' | 'import';
 
 export function Warehouse3D() {
-  const [panelMode, setPanelMode]         = useState<PanelMode>(null);
-  const [selectedZone, setSelectedZone]   = useState<ZoneInfo | null>(null);
-  const [selectedCode, setSelectedCode]   = useState<string | undefined>(undefined);
+  const [activeWH, setActiveWH]             = useState<WHType>('dry');
+  const [panelMode, setPanelMode]           = useState<PanelMode>(null);
+  const [selectedZone, setSelectedZone]     = useState<ZoneInfo | null>(null);
+  const [selectedCode, setSelectedCode]     = useState<string | undefined>(undefined);
   const sceneRef = useRef<SceneHandle>(null);
 
   function handleZoneClick(zone: ZoneInfo) {
@@ -278,7 +278,7 @@ export function Warehouse3D() {
 
         {/* ── Stat cards ── */}
         <div className="w3d-stat-row">
-          {WAREHOUSES.map((wh) => <StatCard key={wh.id} wh={wh} />)}
+          {WH_TABS.map((wh) => <StatCard key={wh.id} wh={wh} />)}
         </div>
 
         {/* ── Action bar ── */}
@@ -303,10 +303,25 @@ export function Warehouse3D() {
           </button>
         </div>
 
+        {/* ── Warehouse type tabs ── */}
+        <div className="w3d-wh-tabs">
+          {WH_TABS.map((wh) => (
+            <button
+              key={wh.id}
+              className={`w3d-wh-tab ${activeWH === wh.id ? 'w3d-wh-tab-active' : ''}`}
+              style={{ '--tab-color': wh.color } as React.CSSProperties}
+              onClick={() => setActiveWH(wh.id)}
+            >
+              <WHIcon type={wh.id} size={15} />
+              <span>{wh.name}</span>
+            </button>
+          ))}
+        </div>
+
         {/* ── Content row: 3D canvas + right panel ── */}
         <div className="w3d-content-row">
           <div className="w3d-canvas-wrap">
-            <WarehouseScene ref={sceneRef} onZoneClick={handleZoneClick} />
+            <WarehouseScene ref={sceneRef} warehouseType={activeWH} onZoneClick={handleZoneClick} />
             <div className="w3d-controls">
               <button className="ctrl-btn" aria-label="Zoom in"   onClick={() => sceneRef.current?.zoomIn()}>   <ZoomIn  size={18} /></button>
               <button className="ctrl-btn" aria-label="Zoom out"  onClick={() => sceneRef.current?.zoomOut()}>  <ZoomOut size={18} /></button>

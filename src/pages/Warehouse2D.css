@@ -421,10 +421,10 @@
   height: 52px;
 }
 
-/* 40ft container: vertical orientation, double height of 20ft */
+/* 40ft container: same width as 20ft, double height */
 .slot-40 {
   width: 40px;
-  height: 84px;
+  height: 108px;
 }
 
 .slot-filled { cursor: pointer; }
@@ -778,7 +778,7 @@
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 @media (max-width: 1200px) {
   .slot-20 { width: 34px; height: 44px; }
-  .slot-40 { width: 34px; height: 72px; }
+  .slot-40 { width: 34px; height: 92px; }
   .slot { font-size: 7.5px; }
   .rack-gap { width: 14px; }
   .rack-block { gap: 6px; }
@@ -806,6 +806,6 @@
   .ctn-card { width: 100%; }
   .w2d-spacer { display: none; }
   .slot-20 { width: 28px; height: 36px; }
-  .slot-40 { width: 28px; height: 60px; }
+  .slot-40 { width: 28px; height: 76px; }
   .slot { font-size: 7px; }
 }

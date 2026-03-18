@@ -67,12 +67,19 @@ function DonutChart({ pct }: { pct: number }) {
 
 // ─── Zone info panel ──────────────────────────────────────────────────────────
 function ZoneInfoPanel({ zone }: { zone: ZoneInfo }) {
+  const isWarning = zone.fillRate >= 90;
   return (
     <div className="w3d-right-panel">
       <div className="rp-zone-header">
         <h2 className="rp-zone-name">{zone.name}</h2>
         <p className="rp-zone-type">{zone.type}</p>
       </div>
+      {isWarning && (
+        <div className="rp-warning-banner">
+          <AlertTriangle size={16} />
+          <span>Cảnh báo: Khu vực gần đầy ({zone.fillRate}%)</span>
+        </div>
+      )}
       <div className="rp-section-label">Tỷ lệ lấp đầy</div>
       <div className="rp-donut-wrap"><DonutChart pct={zone.fillRate} /></div>
       <p className="rp-stat">Số vị trí trống: <strong>{zone.emptySlots}/{zone.totalSlots}</strong></p>

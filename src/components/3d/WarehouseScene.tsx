@@ -1,6 +1,7 @@
 import { Suspense, useRef, useMemo, forwardRef, useImperativeHandle } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
+import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, Environment, ContactShadows, Text } from '@react-three/drei';
+import * as THREE from 'three';
 import { ContainerBlock } from './ContainerBlock';
 import type { ContainerStatus } from './ContainerBlock';
 
@@ -93,6 +94,95 @@ function rowZ(row: number): number {
 const TOTAL_X = colX(7) + CTN_W;
 const TOTAL_Z = rowZ(3) + CTN_L20;
 
+// 48 × 20ft + 24 × 40ft = 72 slots per zone (across 3 levels)
+export const TOTAL_SLOTS = 72;
+const WARNING_THRESHOLD = 0.9; // 90%
+
+// Count filled containers across all 3 levels (mirrors the placement logic)
+export function countFilledSlots(whType: string, zoneName: string): number {
+  const grid = getGrid(whType, zoneName);
+  const sr = (n: number) => {
+    const x = Math.sin(n * 31.7 + ZONES.indexOf(zoneName) * 7.3) * 43758.5453;
+    return x - Math.floor(x);
+  };
+
+  let count = 0;
+  const f20: Set<string>[] = [new Set(), new Set(), new Set()];
+  const f40: Set<string>[] = [new Set(), new Set(), new Set()];
+
+  for (let level = 0; level < 3; level++) {
+    const fillRate = level === 0 ? 1.0 : level === 1 ? 0.6 : 0.3;
+
+    for (let row = 0; row < 4; row++) {
+      for (let col = 0; col < 4; col++) {
+        const k = `${row}-${col}`;
+        if (!grid[row][col]) continue;
+        if (level > 0 && !f20[level - 1].has(k)) continue;
+        if (level > 0 && sr(level * 100 + row * 10 + col) > fillRate) continue;
+        f20[level].add(k);
+        count++;
+      }
+    }
+
+    for (let gi = 0; gi < 2; gi++) {
+      const br = gi * 2;
+      for (let col = 4; col < 8; col++) {
+        const k = `${gi}-${col}`;
+        if (!grid[br][col]) continue;
+        if (level > 0 && !f40[level - 1].has(k)) continue;
+        if (level > 0 && sr(level * 200 + gi * 50 + col) > fillRate) continue;
+        f40[level].add(k);
+        count++;
+      }
+    }
+  }
+
+  return count;
+}
+
+// ─── Warning border (pulsing red when >= 90%) ───────────────────────────────
+function WarningBorder({ centerX, centerZ, width, height }: {
+  centerX: number; centerZ: number; width: number; height: number;
+}) {
+  const matRef = useRef<THREE.MeshStandardMaterial>(null);
+
+  useFrame((state) => {
+    if (!matRef.current) return;
+    const pulse = 0.3 + 0.25 * Math.sin(state.clock.elapsedTime * 3);
+    matRef.current.opacity = pulse;
+  });
+
+  return (
+    <mesh position={[centerX, 0.03, centerZ]} rotation={[-Math.PI / 2, 0, 0]}>
+      <ringGeometry args={[Math.max(width, height) / 2 + 0.5, Math.max(width, height) / 2 + 1.8, 4]} />
+      <meshStandardMaterial
+        ref={matRef}
+        color="#EF4444"
+        transparent
+        opacity={0.3}
+        side={THREE.DoubleSide}
+      />
+    </mesh>
+  );
+}
+
+function WarningLabel({ centerX, centerZ, width }: {
+  centerX: number; centerZ: number; width: number;
+}) {
+  return (
+    <Text
+      position={[centerX, 0.15, centerZ - width / 2 - 3.5]}
+      rotation={[-Math.PI / 2, 0, 0]}
+      fontSize={1.2}
+      color="#EF4444"
+      fontWeight="bold"
+      anchorX="center"
+    >
+      {'⚠ SẮP ĐẦY (≥90%)'}
+    </Text>
+  );
+}
+
 // ─── Zone block ──────────────────────────────────────────────────────────────
 interface ZoneBlockProps {
   position: [number, number, number];
@@ -104,6 +194,8 @@ interface ZoneBlockProps {
 function ZoneBlock({ position, zoneName, whType, onClick }: ZoneBlockProps) {
   const wh = WH_CONFIG[whType];
   const grid = useMemo(() => getGrid(whType, zoneName), [whType, zoneName]);
+  const filledCount = useMemo(() => countFilledSlots(whType, zoneName), [whType, zoneName]);
+  const isWarning = filledCount / TOTAL_SLOTS >= WARNING_THRESHOLD;
 
   const containers = useMemo(() => {
     const items: {
@@ -248,6 +340,14 @@ function ZoneBlock({ position, zoneName, whType, onClick }: ZoneBlockProps) {
           slot={ctn.slot}
         />
       ))}
+
+      {/* 90% warning indicators */}
+      {isWarning && (
+        <>
+          <WarningBorder centerX={centerX} centerZ={centerZ} width={TOTAL_X + 3} height={TOTAL_Z + 3} />
+          <WarningLabel centerX={centerX} centerZ={centerZ} width={TOTAL_Z + 3} />
+        </>
+      )}
     </group>
   );
 }
@@ -319,16 +419,14 @@ export const WarehouseScene = forwardRef<SceneHandle, WarehouseSceneProps>(
 
     function handleZoneClick(zoneName: string) {
       const wh = WH_CONFIG[warehouseType];
-      const grid = getGrid(warehouseType, zoneName);
-      const totalSlots = 32;
-      const filledSlots = grid.flat().filter(Boolean).length;
+      const filledSlots = countFilledSlots(warehouseType, zoneName);
 
       onZoneClick({
         name: zoneName,
         type: wh.name,
-        fillRate: Math.round((filledSlots / totalSlots) * 100),
-        emptySlots: totalSlots - filledSlots,
-        totalSlots,
+        fillRate: Math.round((filledSlots / TOTAL_SLOTS) * 100),
+        emptySlots: TOTAL_SLOTS - filledSlots,
+        totalSlots: TOTAL_SLOTS,
         recentContainers: wh.recentContainers,
       });
     }

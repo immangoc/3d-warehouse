@@ -30,9 +30,9 @@ const WAREHOUSES: WHConfig[] = [
   { id: 'other',   name: 'Kho khác',        color: '#9CA3AF', bgColor: '#F9FAFB', emptyColor: '#E5E7EB', emptyBorder: '#D1D5DB', totalFloors: 3 },
 ];
 
-// ─── Grid generation (4 rows × 6 cols: 4×20ft + 2×40ft) ─────────────────────
+// ─── Grid generation (4 rows × 8 cols: 4×20ft + 4×40ft) ─────────────────────
 function makeGrid(seed: number): boolean[][] {
-  const rows = 4, cols = 6;
+  const rows = 4, cols = 8;
   const seededRandom = (n: number) => {
     const x = Math.sin(n + seed) * 10000;
     return x - Math.floor(x);
@@ -132,20 +132,17 @@ function Rack({ rows, colStart, color, emptyColor, highlighted, is40ft, seedBase
   onClickSlot?: (info: SlotInfo) => void;
 }) {
   if (is40ft) {
-    // Vertical layout: each container on its own row
-    const slots: { ri: number; ci: number }[] = [];
-    rows.forEach((_, ri) => {
-      [0, 1].forEach((ci) => slots.push({ ri, ci }));
-    });
+    // Horizontal row of 2 tall containers, each spanning 2 rows of 20ft height
+    // Only use first row's data (each 40ft occupies the space of 2 vertical 20ft slots)
     return (
-      <div className="rack rack-vertical">
-        {slots.map(({ ri, ci }, idx) => {
+      <div className="rack rack-40ft">
+        {[0, 1].map((ci) => {
           const absCol = colStart + ci;
-          const filled = rows[ri][absCol];
-          const isHL = highlighted?.row === ri && highlighted?.col === absCol;
-          const info = getSlotInfo(filled, is40ft, seedBase + ri * 10 + absCol);
+          const filled = rows[0][absCol];
+          const isHL = highlighted?.row === 0 && highlighted?.col === absCol;
+          const info = getSlotInfo(filled, is40ft, seedBase + absCol);
           return (
-            <Slot key={idx} info={info} color={color} emptyColor={emptyColor} isHL={isHL} onClickSlot={onClickSlot} />
+            <Slot key={ci} info={info} color={color} emptyColor={emptyColor} isHL={isHL} onClickSlot={onClickSlot} />
           );
         })}
       </div>
@@ -182,9 +179,9 @@ function SlotGrid({ grid, color, emptyColor, highlighted, animDir, onClickSlot }
   // Split into 2 row groups of 2 rows each
   const rowGroups = [grid.slice(0, 2), grid.slice(2, 4)];
 
-  // Column pairs for racks: left block [0-1, 2-3] (20ft), right block [4-5] (40ft)
+  // Column pairs for racks: left block [0-1, 2-3] (20ft), right block [4-5, 6-7] (40ft)
   const leftPairs = [0, 2];
-  const rightPairs = [4];
+  const rightPairs = [4, 6];
 
   const animClass = animDir === 'left' ? 'rack-slide-left' : animDir === 'right' ? 'rack-slide-right' : '';
 

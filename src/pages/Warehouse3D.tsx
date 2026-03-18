@@ -1,14 +1,56 @@
-import { useState } from 'react';
-import { useRef } from 'react';
+import { useState, useRef } from 'react';
 import {
-  Search, Plus, ChevronLeft, ZoomIn, ZoomOut, Compass,
-  Package, Calendar, Truck, ChevronRight,
+  Search, Plus, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Compass,
+  Package, Calendar, Truck, Snowflake, AlertTriangle, Layers, Info,
 } from 'lucide-react';
 import { DashboardLayout } from '../components/layout/DashboardLayout';
 import { WarehouseScene } from '../components/3d/WarehouseScene';
 import type { ZoneInfo, SceneHandle } from '../components/3d/WarehouseScene';
 import { Legend } from '../components/ui/Legend';
 import './Warehouse3D.css';
+
+// ─── Types & Data ─────────────────────────────────────────────────────────────
+type WHType = 'cold' | 'dry' | 'fragile' | 'other';
+
+interface WHConfig {
+  id: WHType;
+  name: string;
+  color: string;
+  bgColor: string;
+  pct: string;
+  empty: number;
+}
+
+const WAREHOUSES: WHConfig[] = [
+  { id: 'cold',    name: 'Kho Lạnh',       color: '#3B82F6', bgColor: '#EFF6FF', pct: '65%',   empty: 25 },
+  { id: 'dry',     name: 'Kho Khô',        color: '#F97316', bgColor: '#FFF7ED', pct: '80%',   empty: 12 },
+  { id: 'fragile', name: 'Kho Hàng dễ vỡ', color: '#EF4444', bgColor: '#FEF2F2', pct: '45%',   empty: 18 },
+  { id: 'other',   name: 'Kho khác',       color: '#9CA3AF', bgColor: '#F9FAFB', pct: '90%',   empty: 5 },
+];
+
+// ─── Icons ────────────────────────────────────────────────────────────────────
+function WHIcon({ type, size = 18 }: { type: WHType; size?: number }) {
+  if (type === 'cold')    return <Snowflake     size={size} />;
+  if (type === 'dry')     return <Package       size={size} />;
+  if (type === 'fragile') return <AlertTriangle size={size} />;
+  return                         <Layers        size={size} />;
+}
+
+// ─── Stat card ────────────────────────────────────────────────────────────────
+function StatCard({ wh }: { wh: WHConfig }) {
+  return (
+    <div className="stat-card">
+      <div className="stat-left">
+        <p className="stat-name">{wh.name}</p>
+        <p className="stat-pct" style={{ color: wh.color }}>{wh.pct}</p>
+        <p className="stat-sub">{wh.empty} vị trí trống</p>
+      </div>
+      <div className="stat-icon-wrap" style={{ backgroundColor: wh.bgColor }}>
+        <span style={{ color: wh.color }}><WHIcon type={wh.id} size={22} /></span>
+      </div>
+    </div>
+  );
+}
 
 // ─── Donut chart ─────────────────────────────────────────────────────────────
 function DonutChart({ pct }: { pct: number }) {
@@ -27,8 +69,8 @@ function DonutChart({ pct }: { pct: number }) {
 // ─── Zone info panel ──────────────────────────────────────────────────────────
 function ZoneInfoPanel({ zone }: { zone: ZoneInfo }) {
   return (
-    <div className="right-panel">
-      <div className="rp-header">
+    <div className="w3d-right-panel">
+      <div className="rp-zone-header">
         <h2 className="rp-zone-name">{zone.name}</h2>
         <p className="rp-zone-type">{zone.type}</p>
       </div>
@@ -51,14 +93,14 @@ function WaitingListPanel({ onClose, onSelect }: {
   onSelect: (code: string) => void;
 }) {
   return (
-    <div className="right-panel rp-import">
+    <div className="w3d-right-panel">
       <div className="rp-import-header">
         <button className="rp-back-btn" onClick={onClose}><ChevronLeft size={18} /></button>
         <h2 className="rp-import-title">Container chờ nhập</h2>
       </div>
       <div className="rp-import-body">
-        {WAITING_CONTAINERS.map((code) => (
-          <button key={code} className="waiting-item" onClick={() => onSelect(code)}>
+        {WAITING_CONTAINERS.map((code, idx) => (
+          <button key={idx} className="waiting-item" onClick={() => onSelect(code)}>
             <div className="waiting-icon"><Truck size={18} /></div>
             <span className="waiting-code">{code}</span>
           </button>
@@ -86,7 +128,7 @@ function ImportPanel({ onClose, initialCode }: { onClose: () => void; initialCod
   const [manualPos, setManualPos]        = useState('CT01');
 
   return (
-    <div className="right-panel rp-import">
+    <div className="w3d-right-panel">
       <div className="rp-import-header">
         <button className="rp-back-btn" onClick={onClose}><ChevronLeft size={18} /></button>
         <h2 className="rp-import-title">Nhập Container</h2>
@@ -136,20 +178,20 @@ function ImportPanel({ onClose, initialCode }: { onClose: () => void; initialCod
           <>
             <div className="rp-suggestion-card">
               <div className="rp-sug-header">
-                <div className="rp-sug-icon"><Package size={18} /></div>
+                <div className="rp-sug-icon"><Info size={16} /></div>
                 <span className="rp-sug-title">Gợi ý vị trí</span>
               </div>
               <div className="rp-sug-row">
-                <span>Vị trí</span>
+                <span className="rp-sug-label">Vị trí</span>
                 <span className="rp-sug-value rp-blue">Zone B - Kho Khô<br />Tầng 3 - CT01</span>
               </div>
               <div className="rp-sug-row">
-                <span>Hiệu quả tối ưu</span>
-                <span className="rp-sug-value rp-green">94%</span>
+                <span className="rp-sug-label">Hiệu quả tối ưu</span>
+                <span className="rp-sug-value rp-blue">94%</span>
               </div>
               <div className="rp-sug-row">
-                <span>Số Container đảo chuyển</span>
-                <span className="rp-sug-value rp-green">0</span>
+                <span className="rp-sug-label">Số Container<br />đảo chuyển</span>
+                <span className="rp-sug-value rp-blue">0</span>
               </div>
             </div>
 
@@ -203,9 +245,6 @@ export function Warehouse3D() {
   const [selectedCode, setSelectedCode]   = useState<string | undefined>(undefined);
   const sceneRef = useRef<SceneHandle>(null);
 
-  const showCard    = panelMode === null || panelMode === 'zone';
-  const showButton  = !showCard;
-
   function handleZoneClick(zone: ZoneInfo) {
     setSelectedZone(zone);
     setPanelMode('zone');
@@ -237,18 +276,14 @@ export function Warehouse3D() {
           <p className="w3d-subtitle">Xem tổng quan kho bãi và đường đi container</p>
         </div>
 
+        {/* ── Stat cards ── */}
+        <div className="w3d-stat-row">
+          {WAREHOUSES.map((wh) => <StatCard key={wh.id} wh={wh} />)}
+        </div>
+
         {/* ── Action bar ── */}
         <div className="w3d-action-bar">
-          {/* Search — always left */}
-          <div className="w3d-search">
-            <Search size={15} className="w3d-search-icon" />
-            <input type="text" placeholder="Nhập mã số Container..." />
-          </div>
-
-          <div className="w3d-spacer" />
-
-          {/* Right side: card OR button */}
-          {showCard && (
+          {panelMode === null && (
             <button className="ctn-card" onClick={openWaiting}>
               <div className="ctn-card-icon"><Truck size={20} /></div>
               <div className="ctn-card-text">
@@ -258,15 +293,18 @@ export function Warehouse3D() {
               <ChevronRight size={17} className="ctn-card-chevron" />
             </button>
           )}
-          {showButton && (
-            <button className="btn-primary w3d-import-btn" onClick={() => setPanelMode('import')}>
-              <Plus size={17} /><span>Nhập/Xuất</span>
-            </button>
-          )}
+          <div className="w3d-spacer" />
+          <div className="w3d-search">
+            <Search size={15} className="w3d-search-icon" />
+            <input type="text" placeholder="Nhập mã số Container..." />
+          </div>
+          <button className="btn-primary w3d-import-btn" onClick={() => setPanelMode('import')}>
+            <Plus size={17} /><span>Nhập/Xuất</span>
+          </button>
         </div>
 
-        {/* ── Canvas row ── */}
-        <div className="w3d-canvas-row">
+        {/* ── Content row: 3D canvas + right panel ── */}
+        <div className="w3d-content-row">
           <div className="w3d-canvas-wrap">
             <WarehouseScene ref={sceneRef} onZoneClick={handleZoneClick} />
             <div className="w3d-controls">
@@ -276,11 +314,11 @@ export function Warehouse3D() {
             </div>
           </div>
 
-          {panelMode === 'zone'         && selectedZone  && <ZoneInfoPanel zone={selectedZone} />}
+          {panelMode === 'zone' && selectedZone && <ZoneInfoPanel zone={selectedZone} />}
           {panelMode === 'waiting-list' && (
             <WaitingListPanel onClose={closePanel} onSelect={selectContainer} />
           )}
-          {panelMode === 'import'       && (
+          {panelMode === 'import' && (
             <ImportPanel onClose={closePanel} initialCode={selectedCode} />
           )}
         </div>

@@ -30,9 +30,9 @@ const WAREHOUSES: WHConfig[] = [
   { id: 'other',   name: 'Kho khác',        color: '#9CA3AF', bgColor: '#F9FAFB', emptyColor: '#E5E7EB', emptyBorder: '#D1D5DB', totalFloors: 3 },
 ];
 
-// ─── Grid generation (6 rows × 10 cols) ──────────────────────────────────────
+// ─── Grid generation (4 rows × 8 cols) ───────────────────────────────────────
 function makeGrid(seed: number): boolean[][] {
-  const rows = 6, cols = 10;
+  const rows = 4, cols = 8;
   const seededRandom = (n: number) => {
     const x = Math.sin(n + seed) * 10000;
     return x - Math.floor(x);
@@ -43,7 +43,7 @@ function makeGrid(seed: number): boolean[][] {
       const isLeft = c < 4;
       const rate = isLeft
         ? 0.97
-        : Math.max(0, 0.90 - Math.floor((c - 4) / 2) * (seed * 0.12 + 0.04));
+        : Math.max(0, 0.88 - Math.floor((c - 4) / 2) * (seed * 0.15 + 0.06));
       return seededRandom(idx++) < rate;
     })
   );
@@ -61,7 +61,7 @@ function getGrid(whId: string, zone: string): boolean[][] {
 }
 
 // ─── Rack rendering ──────────────────────────────────────────────────────────
-// A "rack" is a 2-col × 3-row visual block of container slots
+// A "rack" is a 2-col × 2-row visual block of container slots
 function Rack({ rows, colStart, color, emptyColor, highlighted }: {
   rows: boolean[][];
   colStart: number;
@@ -107,18 +107,18 @@ function SlotGrid({ grid, color, emptyColor, highlighted }: {
   emptyColor: string;
   highlighted?: { row: number; col: number } | null;
 }) {
-  // Split into 2 row groups of 3 rows each
-  const rowGroups = [grid.slice(0, 3), grid.slice(3, 6)];
+  // Split into 2 row groups of 2 rows each
+  const rowGroups = [grid.slice(0, 2), grid.slice(2, 4)];
 
-  // Column pairs for racks: left block [0-1, 2-3], right block [4-5, 6-7, 8-9]
+  // Column pairs for racks: left block [0-1, 2-3], right block [4-5, 6-7]
   const leftPairs = [0, 2];
-  const rightPairs = [4, 6, 8];
+  const rightPairs = [4, 6];
 
   return (
     <div className="rack-area">
       {rowGroups.map((rg, gi) => {
-        const hlInGroup = highlighted && (gi === 0 ? highlighted.row < 3 : highlighted.row >= 3)
-          ? { row: highlighted.row - gi * 3, col: highlighted.col }
+        const hlInGroup = highlighted && (gi === 0 ? highlighted.row < 2 : highlighted.row >= 2)
+          ? { row: highlighted.row - gi * 2, col: highlighted.col }
           : null;
         return (
           <div key={gi} className="rack-row-group">

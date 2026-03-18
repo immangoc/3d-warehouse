@@ -122,15 +122,23 @@ function ZoneBlock({ position, zoneName, whType, onClick }: ZoneBlockProps) {
       return x - Math.floor(x);
     };
 
+    // Track which slots are filled per level (containers can only stack on top of existing ones)
+    const filled20: Set<string>[] = [new Set(), new Set(), new Set()];
+    const filled40: Set<string>[] = [new Set(), new Set(), new Set()];
+
     for (let level = 0; level < maxLevels; level++) {
-      const fillRate = level === 0 ? 1.0 : level === 1 ? 0.55 : 0.25;
+      const fillRate = level === 0 ? 1.0 : level === 1 ? 0.6 : 0.3;
 
       // 20ft containers (cols 0-3)
       for (let row = 0; row < 4; row++) {
         for (let col = 0; col < 4; col++) {
+          const slotKey = `${row}-${col}`;
           if (!grid[row][col]) continue;
+          // Level 0: place based on grid. Level 1+: MUST have container below, then random check
+          if (level > 0 && !filled20[level - 1].has(slotKey)) continue;
           if (level > 0 && sr(level * 100 + row * 10 + col) > fillRate) continue;
 
+          filled20[level].add(slotKey);
           items.push({
             key: `20-${level}-${row}-${col}`,
             pos: [colX(col), level * CTN_H + CTN_H / 2, rowZ(row)],
@@ -147,9 +155,13 @@ function ZoneBlock({ position, zoneName, whType, onClick }: ZoneBlockProps) {
       for (let groupIdx = 0; groupIdx < 2; groupIdx++) {
         const baseRow = groupIdx * 2;
         for (let col = 4; col < 8; col++) {
+          const slotKey = `${groupIdx}-${col}`;
           if (!grid[baseRow][col]) continue;
+          // Must have container below to stack
+          if (level > 0 && !filled40[level - 1].has(slotKey)) continue;
           if (level > 0 && sr(level * 200 + groupIdx * 50 + col) > fillRate) continue;
 
+          filled40[level].add(slotKey);
           const z0 = rowZ(baseRow);
           const z1 = rowZ(baseRow + 1);
 
@@ -267,8 +279,11 @@ function CameraControls({ handleRef }: { handleRef: React.MutableRefObject<Scene
     },
     resetView: () => {
       if (!orbitRef.current) return;
-      camera.position.set(50, 40, 60);
-      orbitRef.current.target.set(50, 0, 12);
+      // Center of 3 zones: X = ZONE_SPACING + TOTAL_X/2, Z = TOTAL_Z/2
+      const cx = ZONE_SPACING + TOTAL_X / 2;
+      const cz = TOTAL_Z / 2;
+      camera.position.set(cx, 45, cz + 55);
+      orbitRef.current.target.set(cx, 0, cz);
       orbitRef.current.update();
     },
   };
@@ -320,7 +335,7 @@ export const WarehouseScene = forwardRef<SceneHandle, WarehouseSceneProps>(
 
     return (
       <div style={{ width: '100%', height: '100%', background: 'linear-gradient(to bottom, #dbe4f0, #f5f7fa)' }}>
-        <Canvas shadows camera={{ position: [50, 40, 60], fov: 45 }}>
+        <Canvas shadows camera={{ position: [ZONE_SPACING + TOTAL_X / 2, 45, TOTAL_Z / 2 + 55], fov: 45 }}>
           <Suspense fallback={null}>
             <Environment preset="city" />
             <ambientLight intensity={0.5} />
@@ -332,7 +347,7 @@ export const WarehouseScene = forwardRef<SceneHandle, WarehouseSceneProps>(
             />
 
             {/* Ground */}
-            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[50, -0.02, 12]}>
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[ZONE_SPACING + TOTAL_X / 2, -0.02, TOTAL_Z / 2]}>
               <planeGeometry args={[140, 60]} />
               <meshStandardMaterial color="#F1F5F9" />
             </mesh>

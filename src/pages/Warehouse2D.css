@@ -387,7 +387,9 @@
   gap: 4px;
 }
 
-.rack-vertical {
+/* 40ft rack: horizontal row of tall containers */
+.rack-40ft {
+  flex-direction: row;
   gap: 4px;
 }
 

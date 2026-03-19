@@ -6,8 +6,8 @@ import {
 } from 'lucide-react';
 import { DashboardLayout } from '../components/layout/DashboardLayout';
 import {
-  ZONES, WAREHOUSES, WH_STATS, FLOOR_MAP,
-  WAITING_CONTAINERS, getGrid, getSlotInfo,
+  ZONES, WAREHOUSES, WH_STATS,
+  WAITING_CONTAINERS, getGridForFloor, getSlotInfo,
 } from '../data/warehouse';
 import type { WHType, WHConfig, SlotInfo } from '../data/warehouse';
 import './Warehouse2D.css';
@@ -208,16 +208,16 @@ function ContainerModal({ info, onClose }: { info: SlotInfo; onClose: () => void
 }
 
 // ─── Warehouse card ───────────────────────────────────────────────────────────
-function WarehouseCard({ wh, floor, highlight }: {
+function WarehouseCard({ wh, highlight }: {
   wh: WHConfig;
-  floor: number;
   highlight?: { row: number; col: number } | null;
 }) {
   const [zoneIdx, setZoneIdx] = useState(0);
+  const [floor, setFloor] = useState(1);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [animDir, setAnimDir] = useState<'left' | 'right' | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<SlotInfo | null>(null);
-  const grid = getGrid(wh.id, ZONES[zoneIdx]);
+  const grid = getGridForFloor(wh.id, ZONES[zoneIdx], floor);
 
   const navigateZone = useCallback((dir: 'left' | 'right') => {
     setAnimDir(dir);
@@ -234,6 +234,8 @@ function WarehouseCard({ wh, floor, highlight }: {
     setDropdownOpen(false);
     setTimeout(() => setAnimDir(null), 300);
   }, []);
+
+  const floors = Array.from({ length: wh.totalFloors }, (_, i) => i + 1);
 
   return (
     <div className="wh-card">
@@ -278,7 +280,19 @@ function WarehouseCard({ wh, floor, highlight }: {
       </div>
 
       <div className="wh-card-footer">
-        <div className="wh-footer-item"><Layers size={13} /><span>Tầng {floor}/{wh.totalFloors}</span></div>
+        <div className="wh-floor-selector">
+          <Layers size={13} className="wh-floor-icon" />
+          {floors.map((f) => (
+            <button
+              key={f}
+              className={`wh-floor-btn ${f === floor ? 'wh-floor-btn-active' : ''}`}
+              style={{ '--wh-color': wh.color } as React.CSSProperties}
+              onClick={() => setFloor(f)}
+            >
+              T{f}
+            </button>
+          ))}
+        </div>
         {wh.hasTemp && <div className="wh-footer-item"><Thermometer size={13} /><span>{wh.temp}</span></div>}
       </div>
 
@@ -393,8 +407,6 @@ type PanelMode = null | 'waiting-list' | 'import';
 export function Warehouse2D() {
   const [panelMode, setPanelMode] = useState<PanelMode>(null);
   const [selectedCode, setCode]   = useState<string | undefined>(undefined);
-  const floors = FLOOR_MAP;
-
   function selectContainer(code: string) { setCode(code); setPanelMode('import'); }
   function closePanel() { setPanelMode(null); setCode(undefined); }
 
@@ -440,7 +452,6 @@ export function Warehouse2D() {
               <WarehouseCard
                 key={wh.id}
                 wh={wh}
-                floor={floors[wh.id]}
                 highlight={wh.id === 'dry' && panelMode === 'import' ? sugHL : null}
               />
             ))}

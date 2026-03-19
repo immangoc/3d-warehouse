@@ -8,26 +8,12 @@ import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '../components/layout/DashboardLayout';
 import { OverviewScene } from '../components/3d/OverviewScene';
 import type { OverviewSceneHandle } from '../components/3d/OverviewScene';
-import type { ZoneInfo, WHType } from '../components/3d/WarehouseScene';
 import { Legend } from '../components/ui/Legend';
+import {
+  WH_STATS, WAITING_CONTAINERS, EXPORT_CONTAINERS,
+} from '../data/warehouse';
+import type { WHType, ZoneInfo, WHStat } from '../data/warehouse';
 import './WarehouseOverview.css';
-
-// ─── Types & Data ─────────────────────────────────────────────────────────────
-interface WHStat {
-  id: WHType;
-  name: string;
-  color: string;
-  bgColor: string;
-  pct: string;
-  empty: number;
-}
-
-const WH_STATS: WHStat[] = [
-  { id: 'cold',    name: 'Kho Lạnh',       color: '#3B82F6', bgColor: '#EFF6FF', pct: '65%',  empty: 25 },
-  { id: 'dry',     name: 'Kho Khô',        color: '#F97316', bgColor: '#FFF7ED', pct: '80%',  empty: 12 },
-  { id: 'fragile', name: 'Kho Hàng dễ vỡ', color: '#EF4444', bgColor: '#FEF2F2', pct: '45%',  empty: 18 },
-  { id: 'other',   name: 'Kho khác',       color: '#9CA3AF', bgColor: '#F9FAFB', pct: '90%',  empty: 5 },
-];
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 function WHIcon({ type, size = 18 }: { type: WHType; size?: number }) {
@@ -94,12 +80,6 @@ function ZoneInfoPanel({ zone }: { zone: ZoneInfo }) {
 }
 
 // ─── Waiting list panel ──────────────────────────────────────────────────────
-const WAITING_CONTAINERS = [
-  { code: 'CTN-2026-1234', type: 'Hàng Khô',    date: '19/03/2026' },
-  { code: 'CTN-2026-1235', type: 'Hàng Lạnh',   date: '19/03/2026' },
-  { code: 'CTN-2026-1236', type: 'Hàng dễ vỡ',  date: '18/03/2026' },
-];
-
 function WaitingListPanel({ onClose, onSelect }: {
   onClose: () => void;
   onSelect: (code: string) => void;
@@ -128,11 +108,6 @@ function WaitingListPanel({ onClose, onSelect }: {
 }
 
 // ─── Export panel ────────────────────────────────────────────────────────────
-const EXPORT_CONTAINERS = [
-  { code: 'CTN-2026-0987', type: 'Hàng Khô',   zone: 'Zone B', wh: 'Kho Khô',  floor: 2, slot: 'R1C3' },
-  { code: 'CTN-2026-0654', type: 'Hàng Lạnh',  zone: 'Zone A', wh: 'Kho Lạnh',  floor: 1, slot: 'R2C1' },
-];
-
 type ExportStep = 'search' | 'confirm';
 
 function ExportPanel({ onClose }: { onClose: () => void }) {

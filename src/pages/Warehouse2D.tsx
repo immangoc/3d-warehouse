@@ -5,83 +5,12 @@ import {
   Thermometer, Truck, Calendar, Info, X,
 } from 'lucide-react';
 import { DashboardLayout } from '../components/layout/DashboardLayout';
+import {
+  ZONES, WAREHOUSES, WH_STATS, FLOOR_MAP,
+  WAITING_CONTAINERS, getGrid, getSlotInfo,
+} from '../data/warehouse';
+import type { WHType, WHConfig, SlotInfo } from '../data/warehouse';
 import './Warehouse2D.css';
-
-// ─── Types & Data ─────────────────────────────────────────────────────────────
-const ZONES = ['Zone A', 'Zone B', 'Zone C', 'Zone D'];
-type WHType = 'cold' | 'dry' | 'fragile' | 'other';
-
-interface WHConfig {
-  id: WHType;
-  name: string;
-  color: string;
-  bgColor: string;
-  emptyColor: string;
-  emptyBorder: string;
-  totalFloors: number;
-  hasTemp?: boolean;
-  temp?: string;
-}
-
-const WAREHOUSES: WHConfig[] = [
-  { id: 'cold',    name: 'Kho Lạnh',       color: '#3B82F6', bgColor: '#EFF6FF', emptyColor: '#DBEAFE', emptyBorder: '#BFDBFE', totalFloors: 3, hasTemp: true, temp: '18 độ C' },
-  { id: 'dry',     name: 'Kho Khô',         color: '#F97316', bgColor: '#FFF7ED', emptyColor: '#FED7AA', emptyBorder: '#FDBA74', totalFloors: 3 },
-  { id: 'fragile', name: 'Kho Hàng dễ vỡ', color: '#EF4444', bgColor: '#FEF2F2', emptyColor: '#FECACA', emptyBorder: '#FCA5A5', totalFloors: 3 },
-  { id: 'other',   name: 'Kho khác',        color: '#9CA3AF', bgColor: '#F9FAFB', emptyColor: '#E5E7EB', emptyBorder: '#D1D5DB', totalFloors: 3 },
-];
-
-// ─── Grid generation (4 rows × 8 cols: 4×20ft + 4×40ft) ─────────────────────
-function makeGrid(seed: number): boolean[][] {
-  const rows = 4, cols = 8;
-  const seededRandom = (n: number) => {
-    const x = Math.sin(n + seed) * 10000;
-    return x - Math.floor(x);
-  };
-  let idx = 0;
-  return Array.from({ length: rows }, () =>
-    Array.from({ length: cols }, (_, c) => {
-      const isLeft = c < 4;
-      const rate = isLeft
-        ? 0.97
-        : Math.max(0, 0.88 - Math.floor((c - 4) / 2) * (seed * 0.15 + 0.06));
-      return seededRandom(idx++) < rate;
-    })
-  );
-}
-
-const GRID_CACHE: Record<string, boolean[][]> = {};
-function getGrid(whId: string, zone: string): boolean[][] {
-  const key = `${whId}-${zone}`;
-  if (!GRID_CACHE[key]) {
-    const seeds: Record<string, number> = { cold: 2.1, dry: 3.5, fragile: 5.7, other: 7.2 };
-    const zoneSeed = ZONES.indexOf(zone) * 0.8;
-    GRID_CACHE[key] = makeGrid((seeds[whId] ?? 1) + zoneSeed);
-  }
-  return GRID_CACHE[key];
-}
-
-// ─── Container detail data ───────────────────────────────────────────────────
-interface SlotInfo {
-  filled: boolean;
-  label: string;
-  type: '20ft' | '40ft';
-  cargo?: string;
-  weight?: string;
-  temp?: string;
-}
-
-function getSlotInfo(filled: boolean, is40ft: boolean, seed: number): SlotInfo {
-  const cargos = ['Thủy sản', 'Thịt đông lạnh', 'Rau củ', 'Trái cây', 'Kem', 'Sữa'];
-  const sr = (n: number) => { const x = Math.sin(n + seed) * 10000; return x - Math.floor(x); };
-  return {
-    filled,
-    label: 'CT01',
-    type: is40ft ? '40ft' : '20ft',
-    cargo: filled ? cargos[Math.floor(sr(seed + 1) * cargos.length)] : undefined,
-    weight: filled ? `${Math.floor(sr(seed + 2) * 20 + 5)} tấn` : undefined,
-    temp: filled ? `${Math.floor(sr(seed + 3) * 10 - 5)}°C` : undefined,
-  };
-}
 
 // ─── Slot with tooltip ──────────────────────────────────────────────────────
 function Slot({ info, color, emptyColor, isHL, onClickSlot }: {
@@ -221,12 +150,13 @@ function WHIcon({ type, size = 18 }: { type: WHType; size?: number }) {
 
 // ─── Stat card ────────────────────────────────────────────────────────────────
 function StatCard({ wh }: { wh: WHConfig }) {
+  const stat = WH_STATS.find(s => s.id === wh.id);
   return (
     <div className="stat-card">
       <div className="stat-left">
         <p className="stat-name">{wh.name}</p>
-        <p className="stat-pct" style={{ color: wh.color }}>70,1%</p>
-        <p className="stat-sub">189 vị trí trống</p>
+        <p className="stat-pct" style={{ color: wh.color }}>{stat?.pct ?? '—'}</p>
+        <p className="stat-sub">{stat?.empty ?? 0} vị trí trống</p>
       </div>
       <div className="stat-icon-wrap" style={{ backgroundColor: wh.bgColor }}>
         <span style={{ color: wh.color }}><WHIcon type={wh.id} size={22} /></span>
@@ -358,8 +288,6 @@ function WarehouseCard({ wh, floor, highlight }: {
 }
 
 // ─── Panels ───────────────────────────────────────────────────────────────────
-const WAITING = ['CTN-2026-1234', 'CTN-2026-1234'];
-
 function WaitingListPanel({ onClose, onSelect }: {
   onClose: () => void;
   onSelect: (code: string) => void;
@@ -371,10 +299,10 @@ function WaitingListPanel({ onClose, onSelect }: {
         <h2 className="rp-import-title">Container chờ nhập</h2>
       </div>
       <div className="rp-import-body">
-        {WAITING.map((code, idx) => (
-          <button key={idx} className="waiting-item" onClick={() => onSelect(code)}>
+        {WAITING_CONTAINERS.map((ctn, idx) => (
+          <button key={idx} className="waiting-item" onClick={() => onSelect(ctn.code)}>
             <div className="waiting-icon"><Truck size={18} /></div>
-            <span className="waiting-code">{code}</span>
+            <span className="waiting-code">{ctn.code}</span>
           </button>
         ))}
       </div>
@@ -465,7 +393,7 @@ type PanelMode = null | 'waiting-list' | 'import';
 export function Warehouse2D() {
   const [panelMode, setPanelMode] = useState<PanelMode>(null);
   const [selectedCode, setCode]   = useState<string | undefined>(undefined);
-  const floors: Record<WHType, number> = { cold: 1, dry: 2, fragile: 1, other: 2 };
+  const floors = FLOOR_MAP;
 
   function selectContainer(code: string) { setCode(code); setPanelMode('import'); }
   function closePanel() { setPanelMode(null); setCode(undefined); }

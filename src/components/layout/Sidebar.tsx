@@ -10,7 +10,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import './Sidebar.css';
 
 const navItems = [
-  { icon: LayoutDashboard, label: 'Tổng quan', path: '/' },
+  { icon: LayoutDashboard, label: 'Tổng quan', path: '/tong-quan' },
   {
     icon: Box,
     label: 'Điều độ bãi & Tối ưu hóa',

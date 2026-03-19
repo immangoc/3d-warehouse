@@ -7,6 +7,7 @@ interface TopbarProps {
 }
 
 const BREADCRUMB_MAP: Record<string, { parent: string; current: string }> = {
+  '/tong-quan': { parent: '', current: 'Tổng quan 3D kho bãi' },
   '/3d': { parent: 'Điều độ bãi & Tối ưu hóa', current: 'Sơ đồ 3D trực quan' },
   '/2d': { parent: 'Điều độ bãi & Tối ưu hóa', current: 'Sơ đồ 2D mặt phẳng' },
   '/ha-bai':  { parent: 'Điều độ bãi & Tối ưu hóa', current: 'Quản lý hạ bãi' },

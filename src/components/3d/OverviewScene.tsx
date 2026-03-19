@@ -1,0 +1,450 @@
+import { Suspense, useRef, useMemo, forwardRef, useImperativeHandle } from 'react';
+import { Canvas, useThree, useFrame } from '@react-three/fiber';
+import { OrbitControls, Environment, ContactShadows, Text } from '@react-three/drei';
+import * as THREE from 'three';
+import { ContainerBlock } from './ContainerBlock';
+import { WH_CONFIG, countFilledSlots, TOTAL_SLOTS } from './WarehouseScene';
+import type { WHType, ZoneInfo } from './WarehouseScene';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+export interface OverviewSceneHandle {
+  zoomIn: () => void;
+  zoomOut: () => void;
+  resetView: () => void;
+}
+
+// ─── Grid generation (same logic as WarehouseScene) ──────────────────────────
+const ZONES = ['Zone A', 'Zone B', 'Zone C'];
+
+function makeGrid(seed: number): boolean[][] {
+  const rows = 4, cols = 8;
+  const sr = (n: number) => {
+    const x = Math.sin(n + seed) * 10000;
+    return x - Math.floor(x);
+  };
+  let idx = 0;
+  return Array.from({ length: rows }, () =>
+    Array.from({ length: cols }, (_, c) => {
+      const isLeft = c < 4;
+      const rate = isLeft
+        ? 0.97
+        : Math.max(0, 0.88 - Math.floor((c - 4) / 2) * (seed * 0.15 + 0.06));
+      return sr(idx++) < rate;
+    })
+  );
+}
+
+const GRID_CACHE: Record<string, boolean[][]> = {};
+function getGrid(whId: string, zone: string): boolean[][] {
+  const key = `ov-${whId}-${zone}`;
+  if (!GRID_CACHE[key]) {
+    const seeds: Record<string, number> = { cold: 2.1, dry: 3.5, fragile: 5.7, other: 7.2 };
+    const zoneSeed = ZONES.indexOf(zone) * 0.8;
+    GRID_CACHE[key] = makeGrid((seeds[whId] ?? 1) + zoneSeed);
+  }
+  return GRID_CACHE[key];
+}
+
+// ─── 3D Dimensions ───────────────────────────────────────────────────────────
+const CTN_W = 2.4;
+const CTN_H = 2.6;
+const CTN_L20 = 6.0;
+const GAP = 0.5;
+const RACK_GAP = 1.2;
+const BLOCK_GAP = 3.0;
+const ROW_GROUP_GAP = 2.5;
+
+function colX(col: number): number {
+  if (col < 2) return col * (CTN_W + GAP);
+  if (col < 4) return (col - 2) * (CTN_W + GAP) + 2 * (CTN_W + GAP) + RACK_GAP;
+  if (col < 6) return (col - 4) * (CTN_W + GAP) + 4 * (CTN_W + GAP) + RACK_GAP + BLOCK_GAP;
+  return (col - 6) * (CTN_W + GAP) + 6 * (CTN_W + GAP) + RACK_GAP + BLOCK_GAP + RACK_GAP;
+}
+
+function rowZ(row: number): number {
+  return row * (CTN_L20 + GAP) + (row >= 2 ? ROW_GROUP_GAP : 0);
+}
+
+const TOTAL_X = colX(7) + CTN_W;
+const TOTAL_Z = rowZ(3) + CTN_L20;
+
+const WARNING_THRESHOLD = 0.9;
+
+// ─── Warning border ──────────────────────────────────────────────────────────
+function WarningBorder({ centerX, centerZ, width, height }: {
+  centerX: number; centerZ: number; width: number; height: number;
+}) {
+  const matRef = useRef<THREE.MeshStandardMaterial>(null);
+
+  useFrame((state) => {
+    if (!matRef.current) return;
+    const pulse = 0.3 + 0.25 * Math.sin(state.clock.elapsedTime * 3);
+    matRef.current.opacity = pulse;
+  });
+
+  return (
+    <mesh position={[centerX, 0.03, centerZ]} rotation={[-Math.PI / 2, 0, 0]}>
+      <ringGeometry args={[Math.max(width, height) / 2 + 0.5, Math.max(width, height) / 2 + 1.8, 4]} />
+      <meshStandardMaterial
+        ref={matRef}
+        color="#EF4444"
+        transparent
+        opacity={0.3}
+        side={THREE.DoubleSide}
+      />
+    </mesh>
+  );
+}
+
+// ─── Zone block ──────────────────────────────────────────────────────────────
+interface ZoneBlockProps {
+  position: [number, number, number];
+  zoneName: string;
+  whType: WHType;
+  onClick: () => void;
+}
+
+function ZoneBlock({ position, zoneName, whType, onClick }: ZoneBlockProps) {
+  const wh = WH_CONFIG[whType];
+  const grid = useMemo(() => getGrid(whType, zoneName), [whType, zoneName]);
+  const filledCount = useMemo(() => countFilledSlots(whType, zoneName), [whType, zoneName]);
+  const isWarning = filledCount / TOTAL_SLOTS >= WARNING_THRESHOLD;
+
+  const containers = useMemo(() => {
+    const items: {
+      key: string;
+      pos: [number, number, number];
+      sizeType: '20ft' | '40ft';
+      id: string;
+      floor: number;
+      slot: string;
+      colorSeed: number;
+    }[] = [];
+
+    const maxLevels = 3;
+    const sr = (n: number) => {
+      const x = Math.sin(n * 31.7 + ZONES.indexOf(zoneName) * 7.3) * 43758.5453;
+      return x - Math.floor(x);
+    };
+
+    const filled20: Set<string>[] = [new Set(), new Set(), new Set()];
+    const filled40: Set<string>[] = [new Set(), new Set(), new Set()];
+
+    for (let level = 0; level < maxLevels; level++) {
+      const fillRate = level === 0 ? 1.0 : level === 1 ? 0.6 : 0.3;
+
+      for (let row = 0; row < 4; row++) {
+        for (let col = 0; col < 4; col++) {
+          const slotKey = `${row}-${col}`;
+          if (!grid[row][col]) continue;
+          if (level > 0 && !filled20[level - 1].has(slotKey)) continue;
+          if (level > 0 && sr(level * 100 + row * 10 + col) > fillRate) continue;
+          filled20[level].add(slotKey);
+          items.push({
+            key: `20-${level}-${row}-${col}`,
+            pos: [colX(col), level * CTN_H + CTN_H / 2, rowZ(row)],
+            sizeType: '20ft',
+            id: `CTN-${whType.charAt(0).toUpperCase()}${level}${row}${col}`,
+            floor: level + 1,
+            slot: `R${row + 1}C${col + 1}`,
+            colorSeed: level * 1000 + row * 100 + col * 10 + ZONES.indexOf(zoneName) * 3,
+          });
+        }
+      }
+
+      for (let groupIdx = 0; groupIdx < 2; groupIdx++) {
+        const baseRow = groupIdx * 2;
+        for (let col = 4; col < 8; col++) {
+          const slotKey = `${groupIdx}-${col}`;
+          if (!grid[baseRow][col]) continue;
+          if (level > 0 && !filled40[level - 1].has(slotKey)) continue;
+          if (level > 0 && sr(level * 200 + groupIdx * 50 + col) > fillRate) continue;
+          filled40[level].add(slotKey);
+          const z0 = rowZ(baseRow);
+          const z1 = rowZ(baseRow + 1);
+          items.push({
+            key: `40-${level}-${groupIdx}-${col}`,
+            pos: [colX(col), level * CTN_H + CTN_H / 2, (z0 + z1) / 2],
+            sizeType: '40ft',
+            id: `CTN-${whType.charAt(0).toUpperCase()}${level}${groupIdx}${col}`,
+            floor: level + 1,
+            slot: `R${baseRow + 1}-${baseRow + 2}C${col + 1}`,
+            colorSeed: level * 1000 + groupIdx * 200 + col * 10 + 5 + ZONES.indexOf(zoneName) * 3,
+          });
+        }
+      }
+    }
+
+    return items;
+  }, [grid, whType, zoneName]);
+
+  const centerX = TOTAL_X / 2;
+  const centerZ = TOTAL_Z / 2;
+
+  return (
+    <group position={position}>
+      {/* Ground plate border */}
+      <mesh position={[centerX, 0.01, centerZ]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[TOTAL_X + 3.5, TOTAL_Z + 3.5]} />
+        <meshStandardMaterial color={wh.color} transparent opacity={0.12} />
+      </mesh>
+
+      {/* Ground plate fill */}
+      <mesh
+        position={[centerX, 0.02, centerZ]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        onClick={(e) => { e.stopPropagation(); onClick(); }}
+      >
+        <planeGeometry args={[TOTAL_X + 3, TOTAL_Z + 3]} />
+        <meshStandardMaterial color={wh.plateColor} transparent opacity={0.55} />
+      </mesh>
+
+      {/* Zone label */}
+      <Text
+        position={[centerX, 0.1, TOTAL_Z + 3.5]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        fontSize={2.2}
+        color={wh.color}
+        fontWeight="bold"
+        anchorX="center"
+      >
+        {zoneName.replace('Zone ', '')}
+      </Text>
+
+      {/* Section labels */}
+      <Text
+        position={[5.5, 0.1, -2.2]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        fontSize={0.9}
+        color="#9CA3AF"
+        anchorX="center"
+      >
+        20ft
+      </Text>
+      <Text
+        position={[TOTAL_X - 5.5, 0.1, -2.2]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        fontSize={0.9}
+        color="#9CA3AF"
+        anchorX="center"
+      >
+        40ft
+      </Text>
+
+      {/* Container blocks */}
+      {containers.map((ctn) => (
+        <ContainerBlock
+          key={ctn.key}
+          id={ctn.id}
+          position={ctn.pos}
+          status={wh.status}
+          sizeType={ctn.sizeType}
+          colorSeed={ctn.colorSeed}
+          zone={zoneName.replace('Zone ', '')}
+          floor={ctn.floor}
+          slot={ctn.slot}
+        />
+      ))}
+
+      {/* 90% warning indicators */}
+      {isWarning && (
+        <WarningBorder centerX={centerX} centerZ={centerZ} width={TOTAL_X + 3} height={TOTAL_Z + 3} />
+      )}
+    </group>
+  );
+}
+
+// ─── Warehouse group (3 zones) ───────────────────────────────────────────────
+const ZONE_SPACING = 34;
+
+interface WarehouseGroupProps {
+  position: [number, number, number];
+  whType: WHType;
+  onZoneClick: (zone: ZoneInfo) => void;
+}
+
+function WarehouseGroup({ position, whType, onZoneClick }: WarehouseGroupProps) {
+  const wh = WH_CONFIG[whType];
+
+  function handleZoneClick(zoneName: string) {
+    const filledSlots = countFilledSlots(whType, zoneName);
+    onZoneClick({
+      name: zoneName,
+      type: wh.name,
+      fillRate: Math.round((filledSlots / TOTAL_SLOTS) * 100),
+      emptySlots: TOTAL_SLOTS - filledSlots,
+      totalSlots: TOTAL_SLOTS,
+      recentContainers: wh.recentContainers,
+    });
+  }
+
+  // Width of 3 zones
+  const totalWidth = 2 * ZONE_SPACING + TOTAL_X;
+
+  return (
+    <group position={position}>
+      {/* Warehouse name label */}
+      <Text
+        position={[totalWidth / 2, 0.15, -8]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        fontSize={3.5}
+        color={wh.color}
+        fontWeight="bold"
+        anchorX="center"
+      >
+        {wh.name}
+      </Text>
+
+      {/* Warehouse ground plate */}
+      <mesh
+        position={[totalWidth / 2, -0.01, TOTAL_Z / 2]}
+        rotation={[-Math.PI / 2, 0, 0]}
+      >
+        <planeGeometry args={[totalWidth + 10, TOTAL_Z + 18]} />
+        <meshStandardMaterial color={wh.color} transparent opacity={0.04} />
+      </mesh>
+
+      {/* 3 zones */}
+      {ZONES.map((zone, i) => (
+        <ZoneBlock
+          key={`${whType}-${zone}`}
+          position={[i * ZONE_SPACING, 0, 0]}
+          zoneName={zone}
+          whType={whType}
+          onClick={() => handleZoneClick(zone)}
+        />
+      ))}
+    </group>
+  );
+}
+
+// ─── Camera controls ─────────────────────────────────────────────────────────
+const MIN_DIST = 30;
+const MAX_DIST = 400;
+
+function CameraControls({ handleRef, centerX, centerZ }: {
+  handleRef: React.MutableRefObject<OverviewSceneHandle | null>;
+  centerX: number;
+  centerZ: number;
+}) {
+  const orbitRef = useRef<any>(null);
+  const { camera } = useThree();
+
+  handleRef.current = {
+    zoomIn: () => {
+      if (!orbitRef.current) return;
+      const tgt = orbitRef.current.target;
+      camera.position.sub(tgt).multiplyScalar(0.75);
+      if (camera.position.length() < MIN_DIST) camera.position.setLength(MIN_DIST);
+      camera.position.add(tgt);
+      orbitRef.current.update();
+    },
+    zoomOut: () => {
+      if (!orbitRef.current) return;
+      const tgt = orbitRef.current.target;
+      camera.position.sub(tgt).multiplyScalar(1.35);
+      if (camera.position.length() > MAX_DIST) camera.position.setLength(MAX_DIST);
+      camera.position.add(tgt);
+      orbitRef.current.update();
+    },
+    resetView: () => {
+      if (!orbitRef.current) return;
+      camera.position.set(centerX, 120, centerZ + 130);
+      orbitRef.current.target.set(centerX, 0, centerZ);
+      orbitRef.current.update();
+    },
+  };
+
+  return (
+    <OrbitControls
+      ref={orbitRef}
+      makeDefault
+      maxPolarAngle={Math.PI / 2 - 0.05}
+      minDistance={MIN_DIST}
+      maxDistance={MAX_DIST}
+    />
+  );
+}
+
+// ─── Overview Scene ──────────────────────────────────────────────────────────
+interface OverviewSceneProps {
+  onZoneClick: (zone: ZoneInfo) => void;
+}
+
+// Layout: 2x2 grid of warehouses
+// [cold]    [dry]
+// [fragile] [other]
+const WH_LAYOUT: { type: WHType; row: number; col: number }[] = [
+  { type: 'cold',    row: 0, col: 0 },
+  { type: 'dry',     row: 0, col: 1 },
+  { type: 'fragile', row: 1, col: 0 },
+  { type: 'other',   row: 1, col: 1 },
+];
+
+// Spacing between warehouse groups
+const WH_COL_SPACING = 120; // horizontal gap between two warehouse columns
+const WH_ROW_SPACING = 60;  // vertical gap between two warehouse rows
+
+export const OverviewScene = forwardRef<OverviewSceneHandle, OverviewSceneProps>(
+  ({ onZoneClick }, ref) => {
+    const handleRef = useRef<OverviewSceneHandle | null>(null);
+
+    useImperativeHandle(ref, () => ({
+      zoomIn:    () => handleRef.current?.zoomIn(),
+      zoomOut:   () => handleRef.current?.zoomOut(),
+      resetView: () => handleRef.current?.resetView(),
+    }), []);
+
+    // Calculate center of the entire layout
+    const warehouseWidth = 2 * ZONE_SPACING + TOTAL_X;
+    const centerX = (warehouseWidth + WH_COL_SPACING) / 2;
+    const centerZ = (TOTAL_Z + WH_ROW_SPACING) / 2;
+
+    // Ground plane size
+    const groundW = warehouseWidth * 2 + WH_COL_SPACING + 40;
+    const groundH = (TOTAL_Z + 18) * 2 + WH_ROW_SPACING + 40;
+
+    return (
+      <div style={{ width: '100%', height: '100%', background: 'linear-gradient(to bottom, #dbe4f0, #f5f7fa)' }}>
+        <Canvas shadows camera={{ position: [centerX, 120, centerZ + 130], fov: 45 }}>
+          <Suspense fallback={null}>
+            <Environment preset="city" />
+            <ambientLight intensity={0.5} />
+            <directionalLight
+              position={[60, 70, 50]}
+              intensity={1.5}
+              castShadow
+              shadow-mapSize={[2048, 2048]}
+            />
+
+            {/* Ground */}
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[centerX, -0.05, centerZ]}>
+              <planeGeometry args={[groundW, groundH]} />
+              <meshStandardMaterial color="#F1F5F9" />
+            </mesh>
+
+            <ContactShadows position={[0, 0, 0]} opacity={0.3} scale={groundW} blur={2} far={10} />
+
+            {/* 4 warehouses in 2x2 grid */}
+            {WH_LAYOUT.map(({ type, row, col }) => (
+              <WarehouseGroup
+                key={type}
+                position={[
+                  col * (warehouseWidth + WH_COL_SPACING),
+                  0,
+                  row * (TOTAL_Z + WH_ROW_SPACING),
+                ]}
+                whType={type}
+                onZoneClick={onZoneClick}
+              />
+            ))}
+
+            <CameraControls handleRef={handleRef} centerX={centerX} centerZ={centerZ} />
+          </Suspense>
+        </Canvas>
+      </div>
+    );
+  }
+);
+
+OverviewScene.displayName = 'OverviewScene';

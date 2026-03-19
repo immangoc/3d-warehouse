@@ -173,8 +173,8 @@ export function ContainerBlock({
           <meshStandardMaterial color={frameColor} roughness={0.5} metalness={0.4} />
         </mesh>
 
-        {/* Hover / highlight tooltip */}
-        {(hovered || isHighlighted) && (
+        {/* Hover tooltip */}
+        {hovered && (
           <Html position={[0, HEIGHT / 2 + 1.5, 0]} center style={{ pointerEvents: 'none' }}>
             <div style={{
               background: '#fff',

@@ -161,6 +161,40 @@ export function getGrid(whId: string, zone: string): boolean[][] {
   return GRID_CACHE[key];
 }
 
+// Get grid filtered by floor level (1-based). Floor 1 = base, Floor 2 = 60%, Floor 3 = 30%
+const FLOOR_GRID_CACHE: Record<string, boolean[][]> = {};
+
+export function getGridForFloor(whId: string, zone: string, floor: number): boolean[][] {
+  if (floor <= 1) return getGrid(whId, zone);
+
+  const key = `${whId}-${zone}-f${floor}`;
+  if (FLOOR_GRID_CACHE[key]) return FLOOR_GRID_CACHE[key];
+
+  const baseGrid = getGrid(whId, zone);
+  const fillRate = floor === 2 ? 0.6 : 0.3;
+  const level = floor - 1;
+
+  const sr = (n: number) => {
+    const x = Math.sin(n * 31.7 + ZONES.indexOf(zone) * 7.3) * 43758.5453;
+    return x - Math.floor(x);
+  };
+
+  // For upper floors, a slot can only be filled if the floor below has it filled
+  const belowGrid = floor === 2
+    ? baseGrid
+    : getGridForFloor(whId, zone, floor - 1);
+
+  const result = baseGrid.map((row, ri) =>
+    row.map((_, ci) => {
+      if (!belowGrid[ri][ci]) return false;
+      return sr(level * 100 + ri * 10 + ci) < fillRate;
+    })
+  );
+
+  FLOOR_GRID_CACHE[key] = result;
+  return result;
+}
+
 // ─── Count filled slots across 3 levels ──────────────────────────────────────
 export function countFilledSlots(whType: string, zoneName: string): number {
   const grid = getGrid(whType, zoneName);

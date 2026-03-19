@@ -106,30 +106,6 @@ export const WH_MAP: Record<WHType, WHConfig> = Object.fromEntries(
   WAREHOUSES.map((w) => [w.id, w])
 ) as Record<WHType, WHConfig>;
 
-// ─── Stat card data (computed from actual container grid) ────────────────────
-export function getWHStats(): WHStat[] {
-  return WAREHOUSES.map((wh) => {
-    let totalFilled = 0;
-    const totalAllZones = TOTAL_SLOTS * ZONES.length; // 72 slots × 3 zones = 216
-    for (const zone of ZONES) {
-      totalFilled += countFilledSlots(wh.id, zone);
-    }
-    const pct = Math.round((totalFilled / totalAllZones) * 100);
-    const empty = totalAllZones - totalFilled;
-    return {
-      id: wh.id,
-      name: wh.name,
-      color: wh.color,
-      bgColor: wh.bgColor,
-      pct: `${pct}%`,
-      empty,
-    };
-  });
-}
-
-// Pre-computed for convenience (same values on every call since grids are seeded)
-export const WH_STATS: WHStat[] = getWHStats();
-
 // ─── Floor assignments ───────────────────────────────────────────────────────
 export const FLOOR_MAP: Record<WHType, number> = { cold: 1, dry: 2, fragile: 1, other: 2 };
 
@@ -252,6 +228,30 @@ export function countFilledSlots(whType: string, zoneName: string): number {
 
   return count;
 }
+
+// ─── Stat card data (computed from actual container grid) ────────────────────
+export function getWHStats(): WHStat[] {
+  return WAREHOUSES.map((wh) => {
+    let totalFilled = 0;
+    const totalAllZones = TOTAL_SLOTS * ZONES.length; // 72 slots × 3 zones = 216
+    for (const zone of ZONES) {
+      totalFilled += countFilledSlots(wh.id, zone);
+    }
+    const pct = Math.round((totalFilled / totalAllZones) * 100);
+    const empty = totalAllZones - totalFilled;
+    return {
+      id: wh.id,
+      name: wh.name,
+      color: wh.color,
+      bgColor: wh.bgColor,
+      pct: `${pct}%`,
+      empty,
+    };
+  });
+}
+
+// Pre-computed for convenience (same values on every call since grids are seeded)
+export const WH_STATS: WHStat[] = getWHStats();
 
 // ─── Slot info (2D) ──────────────────────────────────────────────────────────
 const CARGOS = ['Thủy sản', 'Thịt đông lạnh', 'Rau củ', 'Trái cây', 'Kem', 'Sữa'];

@@ -91,9 +91,10 @@ interface ZoneBlockProps {
   zoneName: string;
   whType: WHType;
   onClick: () => void;
+  highlightId?: string;
 }
 
-function ZoneBlock({ position, zoneName, whType, onClick }: ZoneBlockProps) {
+function ZoneBlock({ position, zoneName, whType, onClick, highlightId }: ZoneBlockProps) {
   const wh = WH_MAP[whType];
   const grid = useMemo(() => getGrid(whType, zoneName), [whType, zoneName]);
   const filledCount = useMemo(() => countFilledSlots(whType, zoneName), [whType, zoneName]);
@@ -240,6 +241,7 @@ function ZoneBlock({ position, zoneName, whType, onClick }: ZoneBlockProps) {
           zone={zoneName.replace('Zone ', '')}
           floor={ctn.floor}
           slot={ctn.slot}
+          highlightId={highlightId}
         />
       ))}
 
@@ -305,12 +307,13 @@ function CameraControls({ handleRef }: { handleRef: React.MutableRefObject<Scene
 interface WarehouseSceneProps {
   warehouseType: WHType;
   onZoneClick: (zone: ZoneInfo) => void;
+  highlightId?: string;
 }
 
 const ZONE_SPACING = 34;
 
 export const WarehouseScene = forwardRef<SceneHandle, WarehouseSceneProps>(
-  ({ warehouseType, onZoneClick }, ref) => {
+  ({ warehouseType, onZoneClick, highlightId }, ref) => {
     const handleRef = useRef<SceneHandle | null>(null);
 
     useImperativeHandle(ref, () => ({
@@ -362,6 +365,7 @@ export const WarehouseScene = forwardRef<SceneHandle, WarehouseSceneProps>(
                 zoneName={zone}
                 whType={warehouseType}
                 onClick={() => handleZoneClick(zone)}
+                highlightId={highlightId}
               />
             ))}
 

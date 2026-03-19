@@ -71,9 +71,10 @@ interface ZoneBlockProps {
   zoneName: string;
   whType: WHType;
   onClick: () => void;
+  highlightId?: string;
 }
 
-function ZoneBlock({ position, zoneName, whType, onClick }: ZoneBlockProps) {
+function ZoneBlock({ position, zoneName, whType, onClick, highlightId }: ZoneBlockProps) {
   const wh = WH_MAP[whType];
   const grid = useMemo(() => getGrid(whType, zoneName), [whType, zoneName]);
   const filledCount = useMemo(() => countFilledSlots(whType, zoneName), [whType, zoneName]);
@@ -173,7 +174,8 @@ function ZoneBlock({ position, zoneName, whType, onClick }: ZoneBlockProps) {
       {containers.map((ctn) => (
         <ContainerBlock key={ctn.key} id={ctn.id} position={ctn.pos} status={wh.status}
           sizeType={ctn.sizeType} colorSeed={ctn.colorSeed}
-          zone={zoneName.replace('Zone ', '')} floor={ctn.floor} slot={ctn.slot} />
+          zone={zoneName.replace('Zone ', '')} floor={ctn.floor} slot={ctn.slot}
+          highlightId={highlightId} />
       ))}
 
       {isWarning && (
@@ -190,9 +192,10 @@ interface WarehouseGroupProps {
   position: [number, number, number];
   whType: WHType;
   onZoneClick: (zone: ZoneInfo) => void;
+  highlightId?: string;
 }
 
-function WarehouseGroup({ position, whType, onZoneClick }: WarehouseGroupProps) {
+function WarehouseGroup({ position, whType, onZoneClick, highlightId }: WarehouseGroupProps) {
   const wh = WH_MAP[whType];
 
   function handleZoneClick(zoneName: string) {
@@ -221,7 +224,8 @@ function WarehouseGroup({ position, whType, onZoneClick }: WarehouseGroupProps) 
       </mesh>
       {ZONES.map((zone, i) => (
         <ZoneBlock key={`${whType}-${zone}`} position={[i * ZONE_SPACING, 0, 0]}
-          zoneName={zone} whType={whType} onClick={() => handleZoneClick(zone)} />
+          zoneName={zone} whType={whType} onClick={() => handleZoneClick(zone)}
+          highlightId={highlightId} />
       ))}
     </group>
   );
@@ -273,6 +277,7 @@ function CameraControls({ handleRef, centerX, centerZ }: {
 // ─── Overview Scene ──────────────────────────────────────────────────────────
 interface OverviewSceneProps {
   onZoneClick: (zone: ZoneInfo) => void;
+  highlightId?: string;
 }
 
 const WH_LAYOUT: { type: WHType; row: number; col: number }[] = [
@@ -286,7 +291,7 @@ const WH_COL_SPACING = 120;
 const WH_ROW_SPACING = 60;
 
 export const OverviewScene = forwardRef<OverviewSceneHandle, OverviewSceneProps>(
-  ({ onZoneClick }, ref) => {
+  ({ onZoneClick, highlightId }, ref) => {
     const handleRef = useRef<OverviewSceneHandle | null>(null);
 
     useImperativeHandle(ref, () => ({
@@ -318,7 +323,7 @@ export const OverviewScene = forwardRef<OverviewSceneHandle, OverviewSceneProps>
             {WH_LAYOUT.map(({ type, row, col }) => (
               <WarehouseGroup key={type}
                 position={[col * (warehouseWidth + WH_COL_SPACING), 0, row * (TOTAL_Z + WH_ROW_SPACING)]}
-                whType={type} onZoneClick={onZoneClick} />
+                whType={type} onZoneClick={onZoneClick} highlightId={highlightId} />
             ))}
 
             <CameraControls handleRef={handleRef} centerX={centerX} centerZ={centerZ} />

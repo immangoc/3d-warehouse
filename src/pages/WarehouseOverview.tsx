@@ -368,6 +368,7 @@ export function WarehouseOverview() {
   const [panelMode, setPanelMode]        = useState<PanelMode>(null);
   const [selectedZone, setSelectedZone]  = useState<ZoneInfo | null>(null);
   const [selectedCode, setSelectedCode]  = useState<string | undefined>(undefined);
+  const [searchTerm, setSearchTerm]      = useState('');
   const sceneRef = useRef<OverviewSceneHandle>(null);
   const navigate = useNavigate();
 
@@ -428,7 +429,8 @@ export function WarehouseOverview() {
           <div className="ov-spacer" />
           <div className="ov-search">
             <Search size={15} className="ov-search-icon" />
-            <input type="text" placeholder="Tìm kiếm kho / container..." />
+            <input type="text" placeholder="Tìm kiếm kho / container..."
+              value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
           </div>
           <button className="btn-primary ov-import-btn" onClick={() => setPanelMode('import')}>
             <Plus size={17} /><span>Nhập kho</span>
@@ -441,7 +443,8 @@ export function WarehouseOverview() {
         {/* ── Content row: 3D canvas + right panel ── */}
         <div className="ov-content-row">
           <div className="ov-canvas-wrap">
-            <OverviewScene ref={sceneRef} onZoneClick={handleZoneClick} />
+            <OverviewScene ref={sceneRef} onZoneClick={handleZoneClick}
+              highlightId={searchTerm.trim() || undefined} />
             <div className="ov-controls">
               <button className="ov-ctrl-btn" aria-label="Zoom in"   onClick={() => sceneRef.current?.zoomIn()}>   <ZoomIn  size={18} /></button>
               <button className="ov-ctrl-btn" aria-label="Zoom out"  onClick={() => sceneRef.current?.zoomOut()}>  <ZoomOut size={18} /></button>

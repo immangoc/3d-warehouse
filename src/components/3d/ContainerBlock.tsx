@@ -98,6 +98,7 @@ interface ContainerBlockProps {
   zone?: string;
   floor?: number;
   slot?: string;
+  highlightId?: string;
 }
 
 export function ContainerBlock({
@@ -109,23 +110,33 @@ export function ContainerBlock({
   zone = 'A',
   floor = 1,
   slot = 'CT01',
+  highlightId,
 }: ContainerBlockProps) {
   const LENGTH = sizeType === '40ft' ? 12.5 : 6.0;
   const color = getContainerColor(colorSeed);
   const frameColor = darkenHex(color, 45);
 
   const bounceRef = useRef<THREE.Group>(null);
+  const bodyRef = useRef<THREE.MeshStandardMaterial>(null);
   const [hovered, setHovered] = useState(false);
 
+  const isHighlighted = !!(highlightId && id.toLowerCase().includes(highlightId.toLowerCase()));
+
   const corrugatedTex = useMemo(() => getCorrugatedTexture(color), [color]);
-  const normalScale = useMemo(() => new THREE.Vector2(0.3, 0.3), []);
 
   useFrame((state) => {
     if (!bounceRef.current) return;
-    if (hovered) {
+    if (isHighlighted) {
+      bounceRef.current.position.y = Math.sin(state.clock.elapsedTime * 5) * 0.35;
+    } else if (hovered) {
       bounceRef.current.position.y = Math.sin(state.clock.elapsedTime * 4) * 0.1;
     } else if (Math.abs(bounceRef.current.position.y) > 0.001) {
       bounceRef.current.position.y = THREE.MathUtils.lerp(bounceRef.current.position.y, 0, 0.1);
+    }
+
+    if (bodyRef.current && isHighlighted) {
+      const pulse = 0.25 + 0.2 * Math.sin(state.clock.elapsedTime * 6);
+      bodyRef.current.emissiveIntensity = pulse;
     }
   });
 
@@ -141,9 +152,10 @@ export function ContainerBlock({
         >
           <boxGeometry args={[WIDTH, HEIGHT, LENGTH]} />
           <meshStandardMaterial
+            ref={bodyRef}
             map={corrugatedTex}
-            emissive={hovered ? color : '#000000'}
-            emissiveIntensity={hovered ? 0.2 : 0}
+            emissive={isHighlighted ? '#FACC15' : hovered ? color : '#000000'}
+            emissiveIntensity={isHighlighted ? 0.3 : hovered ? 0.2 : 0}
             roughness={0.55}
             metalness={0.35}
           />
@@ -161,8 +173,8 @@ export function ContainerBlock({
           <meshStandardMaterial color={frameColor} roughness={0.5} metalness={0.4} />
         </mesh>
 
-        {/* Hover tooltip */}
-        {hovered && (
+        {/* Hover / highlight tooltip */}
+        {(hovered || isHighlighted) && (
           <Html position={[0, HEIGHT / 2 + 1.5, 0]} center style={{ pointerEvents: 'none' }}>
             <div style={{
               background: '#fff',

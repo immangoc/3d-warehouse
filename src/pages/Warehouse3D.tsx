@@ -234,6 +234,7 @@ export function Warehouse3D() {
   const [panelMode, setPanelMode]           = useState<PanelMode>(null);
   const [selectedZone, setSelectedZone]     = useState<ZoneInfo | null>(null);
   const [selectedCode, setSelectedCode]     = useState<string | undefined>(undefined);
+  const [searchTerm, setSearchTerm]         = useState('');
   const sceneRef = useRef<SceneHandle>(null);
 
   function handleZoneClick(zone: ZoneInfo) {
@@ -287,7 +288,8 @@ export function Warehouse3D() {
           <div className="w3d-spacer" />
           <div className="w3d-search">
             <Search size={15} className="w3d-search-icon" />
-            <input type="text" placeholder="Nhập mã số Container..." />
+            <input type="text" placeholder="Nhập mã số Container..."
+              value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
           </div>
           <button className="btn-primary w3d-import-btn" onClick={() => setPanelMode('import')}>
             <Plus size={17} /><span>Nhập/Xuất</span>
@@ -312,7 +314,8 @@ export function Warehouse3D() {
         {/* ── Content row: 3D canvas + right panel ── */}
         <div className="w3d-content-row">
           <div className="w3d-canvas-wrap">
-            <WarehouseScene ref={sceneRef} warehouseType={activeWH} onZoneClick={handleZoneClick} />
+            <WarehouseScene ref={sceneRef} warehouseType={activeWH} onZoneClick={handleZoneClick}
+              highlightId={searchTerm.trim() || undefined} />
             <div className="w3d-controls">
               <button className="ctrl-btn" aria-label="Zoom in"   onClick={() => sceneRef.current?.zoomIn()}>   <ZoomIn  size={18} /></button>
               <button className="ctrl-btn" aria-label="Zoom out"  onClick={() => sceneRef.current?.zoomOut()}>  <ZoomOut size={18} /></button>

@@ -5,27 +5,13 @@ import {
 } from 'lucide-react';
 import { DashboardLayout } from '../components/layout/DashboardLayout';
 import { WarehouseScene } from '../components/3d/WarehouseScene';
-import type { ZoneInfo, SceneHandle, WHType } from '../components/3d/WarehouseScene';
-import { WH_CONFIG } from '../components/3d/WarehouseScene';
+import type { SceneHandle } from '../components/3d/WarehouseScene';
 import { Legend } from '../components/ui/Legend';
+import { WH_STATS, WAITING_CONTAINERS } from '../data/warehouse';
+import type { WHType, ZoneInfo, WHStat } from '../data/warehouse';
 import './Warehouse3D.css';
 
-// ─── Types & Data ─────────────────────────────────────────────────────────────
-interface WHTab {
-  id: WHType;
-  name: string;
-  color: string;
-  bgColor: string;
-  pct: string;
-  empty: number;
-}
-
-const WH_TABS: WHTab[] = [
-  { id: 'cold',    name: 'Kho Lạnh',       color: '#3B82F6', bgColor: '#EFF6FF', pct: '65%',   empty: 25 },
-  { id: 'dry',     name: 'Kho Khô',        color: '#F97316', bgColor: '#FFF7ED', pct: '80%',   empty: 12 },
-  { id: 'fragile', name: 'Kho Hàng dễ vỡ', color: '#EF4444', bgColor: '#FEF2F2', pct: '45%',   empty: 18 },
-  { id: 'other',   name: 'Kho khác',       color: '#9CA3AF', bgColor: '#F9FAFB', pct: '90%',   empty: 5 },
-];
+const WH_TABS = WH_STATS;
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 function WHIcon({ type, size = 18 }: { type: WHType; size?: number }) {
@@ -36,7 +22,7 @@ function WHIcon({ type, size = 18 }: { type: WHType; size?: number }) {
 }
 
 // ─── Stat card ────────────────────────────────────────────────────────────────
-function StatCard({ wh }: { wh: WHTab }) {
+function StatCard({ wh }: { wh: WHStat }) {
   return (
     <div className="stat-card">
       <div className="stat-left">
@@ -92,8 +78,6 @@ function ZoneInfoPanel({ zone }: { zone: ZoneInfo }) {
 }
 
 // ─── Waiting list panel ───────────────────────────────────────────────────────
-const WAITING_CONTAINERS = ['CTN-2026-1234', 'CTN-2026-1235'];
-
 function WaitingListPanel({ onClose, onSelect }: {
   onClose: () => void;
   onSelect: (code: string) => void;
@@ -105,10 +89,10 @@ function WaitingListPanel({ onClose, onSelect }: {
         <h2 className="rp-import-title">Container chờ nhập</h2>
       </div>
       <div className="rp-import-body">
-        {WAITING_CONTAINERS.map((code, idx) => (
-          <button key={idx} className="waiting-item" onClick={() => onSelect(code)}>
+        {WAITING_CONTAINERS.map((ctn, idx) => (
+          <button key={idx} className="waiting-item" onClick={() => onSelect(ctn.code)}>
             <div className="waiting-icon"><Truck size={18} /></div>
-            <span className="waiting-code">{code}</span>
+            <span className="waiting-code">{ctn.code}</span>
           </button>
         ))}
       </div>

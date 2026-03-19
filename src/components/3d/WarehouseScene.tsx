@@ -3,72 +3,20 @@ import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, Environment, ContactShadows, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import { ContainerBlock } from './ContainerBlock';
-import type { ContainerStatus } from './ContainerBlock';
+import {
+  ZONES, TOTAL_SLOTS, WARNING_THRESHOLD,
+  WH_MAP, getGrid, countFilledSlots,
+} from '../../data/warehouse';
+import type { WHType, ZoneInfo } from '../../data/warehouse';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-export interface ZoneInfo {
-  name: string;
-  type: string;
-  fillRate: number;
-  emptySlots: number;
-  totalSlots: number;
-  recentContainers: string[];
-}
+// Re-export types and values used by other files
+export type { WHType, ZoneInfo };
+export { WH_MAP as WH_CONFIG, TOTAL_SLOTS, countFilledSlots };
 
 export interface SceneHandle {
   zoomIn: () => void;
   zoomOut: () => void;
   resetView: () => void;
-}
-
-// ─── Warehouse config ────────────────────────────────────────────────────────
-export type WHType = 'cold' | 'dry' | 'fragile' | 'other';
-
-interface WHConfig {
-  name: string;
-  status: ContainerStatus;
-  color: string;
-  plateColor: string;
-  recentContainers: string[];
-}
-
-export const WH_CONFIG: Record<WHType, WHConfig> = {
-  cold:    { name: 'Kho Lạnh',       status: 'cold',    color: '#3B82F6', plateColor: '#BFDBFE', recentContainers: ['CTN11230', 'CTN55321', 'CTN99012'] },
-  dry:     { name: 'Kho Khô',        status: 'dry',     color: '#F97316', plateColor: '#FDBA74', recentContainers: ['CTN02442', 'CTN4ry384', 'CTN84295'] },
-  fragile: { name: 'Kho Hàng dễ vỡ', status: 'fragile', color: '#EF4444', plateColor: '#FECACA', recentContainers: ['CTN77810', 'CTN34521'] },
-  other:   { name: 'Kho khác',       status: 'other',   color: '#9CA3AF', plateColor: '#D1D5DB', recentContainers: ['CTN22310', 'CTN66741', 'CTN88952'] },
-};
-
-// ─── Grid generation (same as 2D) ───────────────────────────────────────────
-const ZONES = ['Zone A', 'Zone B', 'Zone C'];
-
-function makeGrid(seed: number): boolean[][] {
-  const rows = 4, cols = 8;
-  const sr = (n: number) => {
-    const x = Math.sin(n + seed) * 10000;
-    return x - Math.floor(x);
-  };
-  let idx = 0;
-  return Array.from({ length: rows }, () =>
-    Array.from({ length: cols }, (_, c) => {
-      const isLeft = c < 4;
-      const rate = isLeft
-        ? 0.97
-        : Math.max(0, 0.88 - Math.floor((c - 4) / 2) * (seed * 0.15 + 0.06));
-      return sr(idx++) < rate;
-    })
-  );
-}
-
-const GRID_CACHE: Record<string, boolean[][]> = {};
-function getGrid(whId: string, zone: string): boolean[][] {
-  const key = `${whId}-${zone}`;
-  if (!GRID_CACHE[key]) {
-    const seeds: Record<string, number> = { cold: 2.1, dry: 3.5, fragile: 5.7, other: 7.2 };
-    const zoneSeed = ZONES.indexOf(zone) * 0.8;
-    GRID_CACHE[key] = makeGrid((seeds[whId] ?? 1) + zoneSeed);
-  }
-  return GRID_CACHE[key];
 }
 
 // ─── 3D Dimensions ───────────────────────────────────────────────────────────
@@ -93,52 +41,6 @@ function rowZ(row: number): number {
 
 const TOTAL_X = colX(7) + CTN_W;
 const TOTAL_Z = rowZ(3) + CTN_L20;
-
-// 48 × 20ft + 24 × 40ft = 72 slots per zone (across 3 levels)
-export const TOTAL_SLOTS = 72;
-const WARNING_THRESHOLD = 0.9; // 90%
-
-// Count filled containers across all 3 levels (mirrors the placement logic)
-export function countFilledSlots(whType: string, zoneName: string): number {
-  const grid = getGrid(whType, zoneName);
-  const sr = (n: number) => {
-    const x = Math.sin(n * 31.7 + ZONES.indexOf(zoneName) * 7.3) * 43758.5453;
-    return x - Math.floor(x);
-  };
-
-  let count = 0;
-  const f20: Set<string>[] = [new Set(), new Set(), new Set()];
-  const f40: Set<string>[] = [new Set(), new Set(), new Set()];
-
-  for (let level = 0; level < 3; level++) {
-    const fillRate = level === 0 ? 1.0 : level === 1 ? 0.6 : 0.3;
-
-    for (let row = 0; row < 4; row++) {
-      for (let col = 0; col < 4; col++) {
-        const k = `${row}-${col}`;
-        if (!grid[row][col]) continue;
-        if (level > 0 && !f20[level - 1].has(k)) continue;
-        if (level > 0 && sr(level * 100 + row * 10 + col) > fillRate) continue;
-        f20[level].add(k);
-        count++;
-      }
-    }
-
-    for (let gi = 0; gi < 2; gi++) {
-      const br = gi * 2;
-      for (let col = 4; col < 8; col++) {
-        const k = `${gi}-${col}`;
-        if (!grid[br][col]) continue;
-        if (level > 0 && !f40[level - 1].has(k)) continue;
-        if (level > 0 && sr(level * 200 + gi * 50 + col) > fillRate) continue;
-        f40[level].add(k);
-        count++;
-      }
-    }
-  }
-
-  return count;
-}
 
 // ─── Warning border (pulsing red when >= 90%) ───────────────────────────────
 function WarningBorder({ centerX, centerZ, width, height }: {
@@ -192,7 +94,7 @@ interface ZoneBlockProps {
 }
 
 function ZoneBlock({ position, zoneName, whType, onClick }: ZoneBlockProps) {
-  const wh = WH_CONFIG[whType];
+  const wh = WH_MAP[whType];
   const grid = useMemo(() => getGrid(whType, zoneName), [whType, zoneName]);
   const filledCount = useMemo(() => countFilledSlots(whType, zoneName), [whType, zoneName]);
   const isWarning = filledCount / TOTAL_SLOTS >= WARNING_THRESHOLD;
@@ -418,7 +320,7 @@ export const WarehouseScene = forwardRef<SceneHandle, WarehouseSceneProps>(
     }), []);
 
     function handleZoneClick(zoneName: string) {
-      const wh = WH_CONFIG[warehouseType];
+      const wh = WH_MAP[warehouseType];
       const filledSlots = countFilledSlots(warehouseType, zoneName);
 
       onZoneClick({

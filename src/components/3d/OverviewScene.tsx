@@ -3,46 +3,17 @@ import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, Environment, ContactShadows, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import { ContainerBlock } from './ContainerBlock';
-import { WH_CONFIG, countFilledSlots, TOTAL_SLOTS } from './WarehouseScene';
-import type { WHType, ZoneInfo } from './WarehouseScene';
+import {
+  ZONES, TOTAL_SLOTS, WARNING_THRESHOLD,
+  WH_MAP, getGrid, countFilledSlots,
+} from '../../data/warehouse';
+import type { WHType, ZoneInfo } from '../../data/warehouse';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface OverviewSceneHandle {
   zoomIn: () => void;
   zoomOut: () => void;
   resetView: () => void;
-}
-
-// ─── Grid generation (same logic as WarehouseScene) ──────────────────────────
-const ZONES = ['Zone A', 'Zone B', 'Zone C'];
-
-function makeGrid(seed: number): boolean[][] {
-  const rows = 4, cols = 8;
-  const sr = (n: number) => {
-    const x = Math.sin(n + seed) * 10000;
-    return x - Math.floor(x);
-  };
-  let idx = 0;
-  return Array.from({ length: rows }, () =>
-    Array.from({ length: cols }, (_, c) => {
-      const isLeft = c < 4;
-      const rate = isLeft
-        ? 0.97
-        : Math.max(0, 0.88 - Math.floor((c - 4) / 2) * (seed * 0.15 + 0.06));
-      return sr(idx++) < rate;
-    })
-  );
-}
-
-const GRID_CACHE: Record<string, boolean[][]> = {};
-function getGrid(whId: string, zone: string): boolean[][] {
-  const key = `ov-${whId}-${zone}`;
-  if (!GRID_CACHE[key]) {
-    const seeds: Record<string, number> = { cold: 2.1, dry: 3.5, fragile: 5.7, other: 7.2 };
-    const zoneSeed = ZONES.indexOf(zone) * 0.8;
-    GRID_CACHE[key] = makeGrid((seeds[whId] ?? 1) + zoneSeed);
-  }
-  return GRID_CACHE[key];
 }
 
 // ─── 3D Dimensions ───────────────────────────────────────────────────────────
@@ -67,8 +38,6 @@ function rowZ(row: number): number {
 
 const TOTAL_X = colX(7) + CTN_W;
 const TOTAL_Z = rowZ(3) + CTN_L20;
-
-const WARNING_THRESHOLD = 0.9;
 
 // ─── Warning border ──────────────────────────────────────────────────────────
 function WarningBorder({ centerX, centerZ, width, height }: {
@@ -105,7 +74,7 @@ interface ZoneBlockProps {
 }
 
 function ZoneBlock({ position, zoneName, whType, onClick }: ZoneBlockProps) {
-  const wh = WH_CONFIG[whType];
+  const wh = WH_MAP[whType];
   const grid = useMemo(() => getGrid(whType, zoneName), [whType, zoneName]);
   const filledCount = useMemo(() => countFilledSlots(whType, zoneName), [whType, zoneName]);
   const isWarning = filledCount / TOTAL_SLOTS >= WARNING_THRESHOLD;
@@ -183,70 +152,30 @@ function ZoneBlock({ position, zoneName, whType, onClick }: ZoneBlockProps) {
 
   return (
     <group position={position}>
-      {/* Ground plate border */}
       <mesh position={[centerX, 0.01, centerZ]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[TOTAL_X + 3.5, TOTAL_Z + 3.5]} />
         <meshStandardMaterial color={wh.color} transparent opacity={0.12} />
       </mesh>
-
-      {/* Ground plate fill */}
-      <mesh
-        position={[centerX, 0.02, centerZ]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        onClick={(e) => { e.stopPropagation(); onClick(); }}
-      >
+      <mesh position={[centerX, 0.02, centerZ]} rotation={[-Math.PI / 2, 0, 0]}
+        onClick={(e) => { e.stopPropagation(); onClick(); }}>
         <planeGeometry args={[TOTAL_X + 3, TOTAL_Z + 3]} />
         <meshStandardMaterial color={wh.plateColor} transparent opacity={0.55} />
       </mesh>
-
-      {/* Zone label */}
-      <Text
-        position={[centerX, 0.1, TOTAL_Z + 3.5]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        fontSize={2.2}
-        color={wh.color}
-        fontWeight="bold"
-        anchorX="center"
-      >
+      <Text position={[centerX, 0.1, TOTAL_Z + 3.5]} rotation={[-Math.PI / 2, 0, 0]}
+        fontSize={2.2} color={wh.color} fontWeight="bold" anchorX="center">
         {zoneName.replace('Zone ', '')}
       </Text>
+      <Text position={[5.5, 0.1, -2.2]} rotation={[-Math.PI / 2, 0, 0]}
+        fontSize={0.9} color="#9CA3AF" anchorX="center">20ft</Text>
+      <Text position={[TOTAL_X - 5.5, 0.1, -2.2]} rotation={[-Math.PI / 2, 0, 0]}
+        fontSize={0.9} color="#9CA3AF" anchorX="center">40ft</Text>
 
-      {/* Section labels */}
-      <Text
-        position={[5.5, 0.1, -2.2]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        fontSize={0.9}
-        color="#9CA3AF"
-        anchorX="center"
-      >
-        20ft
-      </Text>
-      <Text
-        position={[TOTAL_X - 5.5, 0.1, -2.2]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        fontSize={0.9}
-        color="#9CA3AF"
-        anchorX="center"
-      >
-        40ft
-      </Text>
-
-      {/* Container blocks */}
       {containers.map((ctn) => (
-        <ContainerBlock
-          key={ctn.key}
-          id={ctn.id}
-          position={ctn.pos}
-          status={wh.status}
-          sizeType={ctn.sizeType}
-          colorSeed={ctn.colorSeed}
-          zone={zoneName.replace('Zone ', '')}
-          floor={ctn.floor}
-          slot={ctn.slot}
-        />
+        <ContainerBlock key={ctn.key} id={ctn.id} position={ctn.pos} status={wh.status}
+          sizeType={ctn.sizeType} colorSeed={ctn.colorSeed}
+          zone={zoneName.replace('Zone ', '')} floor={ctn.floor} slot={ctn.slot} />
       ))}
 
-      {/* 90% warning indicators */}
       {isWarning && (
         <WarningBorder centerX={centerX} centerZ={centerZ} width={TOTAL_X + 3} height={TOTAL_Z + 3} />
       )}
@@ -264,7 +193,7 @@ interface WarehouseGroupProps {
 }
 
 function WarehouseGroup({ position, whType, onZoneClick }: WarehouseGroupProps) {
-  const wh = WH_CONFIG[whType];
+  const wh = WH_MAP[whType];
 
   function handleZoneClick(zoneName: string) {
     const filledSlots = countFilledSlots(whType, zoneName);
@@ -278,41 +207,21 @@ function WarehouseGroup({ position, whType, onZoneClick }: WarehouseGroupProps) 
     });
   }
 
-  // Width of 3 zones
   const totalWidth = 2 * ZONE_SPACING + TOTAL_X;
 
   return (
     <group position={position}>
-      {/* Warehouse name label */}
-      <Text
-        position={[totalWidth / 2, 0.15, -8]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        fontSize={3.5}
-        color={wh.color}
-        fontWeight="bold"
-        anchorX="center"
-      >
+      <Text position={[totalWidth / 2, 0.15, -8]} rotation={[-Math.PI / 2, 0, 0]}
+        fontSize={3.5} color={wh.color} fontWeight="bold" anchorX="center">
         {wh.name}
       </Text>
-
-      {/* Warehouse ground plate */}
-      <mesh
-        position={[totalWidth / 2, -0.01, TOTAL_Z / 2]}
-        rotation={[-Math.PI / 2, 0, 0]}
-      >
+      <mesh position={[totalWidth / 2, -0.01, TOTAL_Z / 2]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[totalWidth + 10, TOTAL_Z + 18]} />
         <meshStandardMaterial color={wh.color} transparent opacity={0.04} />
       </mesh>
-
-      {/* 3 zones */}
       {ZONES.map((zone, i) => (
-        <ZoneBlock
-          key={`${whType}-${zone}`}
-          position={[i * ZONE_SPACING, 0, 0]}
-          zoneName={zone}
-          whType={whType}
-          onClick={() => handleZoneClick(zone)}
-        />
+        <ZoneBlock key={`${whType}-${zone}`} position={[i * ZONE_SPACING, 0, 0]}
+          zoneName={zone} whType={whType} onClick={() => handleZoneClick(zone)} />
       ))}
     </group>
   );
@@ -356,13 +265,8 @@ function CameraControls({ handleRef, centerX, centerZ }: {
   };
 
   return (
-    <OrbitControls
-      ref={orbitRef}
-      makeDefault
-      maxPolarAngle={Math.PI / 2 - 0.05}
-      minDistance={MIN_DIST}
-      maxDistance={MAX_DIST}
-    />
+    <OrbitControls ref={orbitRef} makeDefault
+      maxPolarAngle={Math.PI / 2 - 0.05} minDistance={MIN_DIST} maxDistance={MAX_DIST} />
   );
 }
 
@@ -371,9 +275,6 @@ interface OverviewSceneProps {
   onZoneClick: (zone: ZoneInfo) => void;
 }
 
-// Layout: 2x2 grid of warehouses
-// [cold]    [dry]
-// [fragile] [other]
 const WH_LAYOUT: { type: WHType; row: number; col: number }[] = [
   { type: 'cold',    row: 0, col: 0 },
   { type: 'dry',     row: 0, col: 1 },
@@ -381,9 +282,8 @@ const WH_LAYOUT: { type: WHType; row: number; col: number }[] = [
   { type: 'other',   row: 1, col: 1 },
 ];
 
-// Spacing between warehouse groups
-const WH_COL_SPACING = 120; // horizontal gap between two warehouse columns
-const WH_ROW_SPACING = 60;  // vertical gap between two warehouse rows
+const WH_COL_SPACING = 120;
+const WH_ROW_SPACING = 60;
 
 export const OverviewScene = forwardRef<OverviewSceneHandle, OverviewSceneProps>(
   ({ onZoneClick }, ref) => {
@@ -395,12 +295,9 @@ export const OverviewScene = forwardRef<OverviewSceneHandle, OverviewSceneProps>
       resetView: () => handleRef.current?.resetView(),
     }), []);
 
-    // Calculate center of the entire layout
     const warehouseWidth = 2 * ZONE_SPACING + TOTAL_X;
     const centerX = (warehouseWidth + WH_COL_SPACING) / 2;
     const centerZ = (TOTAL_Z + WH_ROW_SPACING) / 2;
-
-    // Ground plane size
     const groundW = warehouseWidth * 2 + WH_COL_SPACING + 40;
     const groundH = (TOTAL_Z + 18) * 2 + WH_ROW_SPACING + 40;
 
@@ -410,33 +307,18 @@ export const OverviewScene = forwardRef<OverviewSceneHandle, OverviewSceneProps>
           <Suspense fallback={null}>
             <Environment preset="city" />
             <ambientLight intensity={0.5} />
-            <directionalLight
-              position={[60, 70, 50]}
-              intensity={1.5}
-              castShadow
-              shadow-mapSize={[2048, 2048]}
-            />
+            <directionalLight position={[60, 70, 50]} intensity={1.5} castShadow shadow-mapSize={[2048, 2048]} />
 
-            {/* Ground */}
             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[centerX, -0.05, centerZ]}>
               <planeGeometry args={[groundW, groundH]} />
               <meshStandardMaterial color="#F1F5F9" />
             </mesh>
-
             <ContactShadows position={[0, 0, 0]} opacity={0.3} scale={groundW} blur={2} far={10} />
 
-            {/* 4 warehouses in 2x2 grid */}
             {WH_LAYOUT.map(({ type, row, col }) => (
-              <WarehouseGroup
-                key={type}
-                position={[
-                  col * (warehouseWidth + WH_COL_SPACING),
-                  0,
-                  row * (TOTAL_Z + WH_ROW_SPACING),
-                ]}
-                whType={type}
-                onZoneClick={onZoneClick}
-              />
+              <WarehouseGroup key={type}
+                position={[col * (warehouseWidth + WH_COL_SPACING), 0, row * (TOTAL_Z + WH_ROW_SPACING)]}
+                whType={type} onZoneClick={onZoneClick} />
             ))}
 
             <CameraControls handleRef={handleRef} centerX={centerX} centerZ={centerZ} />

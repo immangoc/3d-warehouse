@@ -741,6 +741,30 @@
 }
 .rp-field input:focus { border-color: var(--color-primary); }
 
+.rp-size-toggle {
+  display: flex;
+  gap: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #E5E7EB;
+}
+.rp-size-btn {
+  flex: 1;
+  padding: 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  background: #F9FAFB;
+  color: #6B7280;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.rp-size-btn:hover { background: #F3F4F6; }
+.rp-size-btn-active {
+  background: #1E3A8A;
+  color: #fff;
+}
+
 .rp-select-wrap { position: relative; }
 .rp-select-wrap select {
   width: 100%;

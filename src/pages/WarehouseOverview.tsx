@@ -253,6 +253,7 @@ function ImportPanel({ onClose, initialCode, onPreviewChange }: {
   const [form, setForm] = useState({
     containerCode: initialCode ?? '',
     cargoType: 'Hàng Khô',
+    sizeType: '20ft' as '20ft' | '40ft',
     weight: '',
     exportDate: '',
     priority: 'Trung bình',
@@ -269,7 +270,7 @@ function ImportPanel({ onClose, initialCode, onPreviewChange }: {
   }, [onPreviewChange]);
 
   function handleGetSuggestion() {
-    const sug = findSuggestedPosition(form.cargoType);
+    const sug = findSuggestedPosition(form.cargoType, form.sizeType);
     setSuggestion(sug);
     setStep('suggestion');
 
@@ -314,7 +315,7 @@ function ImportPanel({ onClose, initialCode, onPreviewChange }: {
       row,
       col,
       slot,
-      sizeType: suggestion?.sizeType ?? '20ft',
+      sizeType: suggestion?.sizeType ?? form.sizeType,
       importDate: dateStr,
       exportDate: form.exportDate,
       priority: form.priority,
@@ -325,7 +326,6 @@ function ImportPanel({ onClose, initialCode, onPreviewChange }: {
   }
 
   function handleManualPositionChange(newZone: string, newFloor: string) {
-    // Update preview when manual position changes
     const whType = cargoTypeToWHType(manualWarehouse === 'Kho Lạnh' ? 'Hàng Lạnh'
       : manualWarehouse === 'Kho Hàng dễ vỡ' ? 'Hàng dễ vỡ'
       : manualWarehouse === 'Kho khác' ? 'Khác' : 'Hàng Khô');
@@ -336,7 +336,7 @@ function ImportPanel({ onClose, initialCode, onPreviewChange }: {
       floor: parseInt(newFloor),
       row: suggestion?.row ?? 0,
       col: suggestion?.col ?? 0,
-      sizeType: suggestion?.sizeType ?? '20ft',
+      sizeType: suggestion?.sizeType ?? form.sizeType,
       containerCode: form.containerCode || 'Container mới',
     });
   }
@@ -365,6 +365,21 @@ function ImportPanel({ onClose, initialCode, onPreviewChange }: {
                   <option>Hàng Khô</option><option>Hàng Lạnh</option>
                   <option>Hàng dễ vỡ</option><option>Khác</option>
                 </select>
+              </div>
+            </div>
+            <div className="ov-rp-field">
+              <label>Loại container</label>
+              <div className="ov-rp-size-toggle">
+                <button type="button"
+                  className={`ov-rp-size-btn ${form.sizeType === '20ft' ? 'ov-rp-size-btn-active' : ''}`}
+                  onClick={() => setForm({ ...form, sizeType: '20ft' })}>
+                  20ft
+                </button>
+                <button type="button"
+                  className={`ov-rp-size-btn ${form.sizeType === '40ft' ? 'ov-rp-size-btn-active' : ''}`}
+                  onClick={() => setForm({ ...form, sizeType: '40ft' })}>
+                  40ft
+                </button>
               </div>
             </div>
             <div className="ov-rp-field">

@@ -355,6 +355,7 @@ function ImportPanel({ onClose, initialCode, onPreviewChange }: {
   const [form, setForm] = useState({
     containerCode: initialCode ?? '',
     cargoType: 'Hàng Khô',
+    sizeType: '20ft' as '20ft' | '40ft',
     weight: '',
     exportDate: '',
     priority: 'Cao',
@@ -370,7 +371,7 @@ function ImportPanel({ onClose, initialCode, onPreviewChange }: {
   }, [onPreviewChange]);
 
   function handleGetSuggestion() {
-    const sug = findSuggestedPosition(form.cargoType);
+    const sug = findSuggestedPosition(form.cargoType, form.sizeType);
     setSuggestion(sug);
     setStep('suggestion');
 
@@ -412,7 +413,7 @@ function ImportPanel({ onClose, initialCode, onPreviewChange }: {
       row: suggestion?.row ?? 0,
       col: suggestion?.col ?? 0,
       slot,
-      sizeType: suggestion?.sizeType ?? '20ft',
+      sizeType: suggestion?.sizeType ?? form.sizeType,
       importDate: dateStr,
       exportDate: form.exportDate,
       priority: form.priority,
@@ -433,7 +434,7 @@ function ImportPanel({ onClose, initialCode, onPreviewChange }: {
       floor: parseInt(newFloor),
       row: suggestion?.row ?? 0,
       col: suggestion?.col ?? 0,
-      sizeType: suggestion?.sizeType ?? '20ft',
+      sizeType: suggestion?.sizeType ?? form.sizeType,
       containerCode: form.containerCode || 'Container mới',
     });
   }
@@ -459,6 +460,20 @@ function ImportPanel({ onClose, initialCode, onPreviewChange }: {
                   <option>Hàng Khô</option><option>Hàng Lạnh</option>
                   <option>Hàng dễ vỡ</option><option>Khác</option>
                 </select>
+              </div>
+            </div>
+            <div className="rp-field"><label>Loại container</label>
+              <div className="rp-size-toggle">
+                <button type="button"
+                  className={`rp-size-btn ${form.sizeType === '20ft' ? 'rp-size-btn-active' : ''}`}
+                  onClick={() => setForm({ ...form, sizeType: '20ft' })}>
+                  20ft
+                </button>
+                <button type="button"
+                  className={`rp-size-btn ${form.sizeType === '40ft' ? 'rp-size-btn-active' : ''}`}
+                  onClick={() => setForm({ ...form, sizeType: '40ft' })}>
+                  40ft
+                </button>
               </div>
             </div>
             <div className="rp-field"><label>Trọng lượng</label>

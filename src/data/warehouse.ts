@@ -253,6 +253,17 @@ export function getWHStats(): WHStat[] {
 // Pre-computed for convenience (same values on every call since grids are seeded)
 export const WH_STATS: WHStat[] = getWHStats();
 
+// ─── Preview position (shared type for ghost container) ─────────────────────
+export interface PreviewPosition {
+  whType: WHType;
+  zone: string;
+  floor: number;
+  row: number;
+  col: number;
+  sizeType: '20ft' | '40ft';
+  containerCode?: string;
+}
+
 // ─── Slot info (2D) ──────────────────────────────────────────────────────────
 const CARGOS = ['Thủy sản', 'Thịt đông lạnh', 'Rau củ', 'Trái cây', 'Kem', 'Sữa'];
 

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useSyncExternalStore } from 'react';
 import {
   Search, Plus, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Compass,
   Package, Calendar, Truck, Snowflake, AlertTriangle, Layers, Info,
@@ -12,7 +12,12 @@ import { Legend } from '../components/ui/Legend';
 import {
   WH_STATS, WAITING_CONTAINERS, EXPORT_CONTAINERS,
 } from '../data/warehouse';
-import type { WHType, ZoneInfo, WHStat } from '../data/warehouse';
+import type { WHType, ZoneInfo, WHStat, PreviewPosition } from '../data/warehouse';
+import {
+  findSuggestedPosition, addImportedContainer,
+  subscribe, getImportedContainers, cargoTypeToWHType, cargoTypeToWHName,
+} from '../data/containerStore';
+import type { SuggestedPosition } from '../data/containerStore';
 import './WarehouseOverview.css';
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -56,6 +61,21 @@ function DonutChart({ pct }: { pct: number }) {
 // ─── Zone info panel ──────────────────────────────────────────────────────────
 function ZoneInfoPanel({ zone }: { zone: ZoneInfo }) {
   const isWarning = zone.fillRate >= 90;
+
+  // Use real data from store for recent containers
+  const imported = useSyncExternalStore(subscribe, getImportedContainers);
+  const whTypeMap: Record<string, WHType> = {
+    'Kho Lạnh': 'cold', 'Kho Khô': 'dry', 'Kho Hàng dễ vỡ': 'fragile', 'Kho khác': 'other',
+  };
+  const whType = whTypeMap[zone.type];
+  const recentFromStore = whType
+    ? imported.filter((c) => c.whType === whType && c.zone === zone.name).slice(0, 5)
+    : [];
+  // Combine store data with fallback static data
+  const recentCodes = recentFromStore.length > 0
+    ? recentFromStore.map((c) => `${c.code} (${c.zone} T${c.floor})`)
+    : zone.recentContainers;
+
   return (
     <div className="ov-right-panel">
       <div className="ov-rp-zone-header">
@@ -73,7 +93,10 @@ function ZoneInfoPanel({ zone }: { zone: ZoneInfo }) {
       <p className="ov-rp-stat">Số vị trí trống: <strong>{zone.emptySlots}/{zone.totalSlots}</strong></p>
       <div className="ov-rp-section-label ov-rp-mt">Danh sách Container nhập gần đây:</div>
       <ul className="ov-rp-container-list">
-        {zone.recentContainers.map((c) => <li key={c}>{c}</li>)}
+        {recentCodes.length > 0
+          ? recentCodes.map((c) => <li key={c}>{c}</li>)
+          : <li className="ov-rp-empty-hint">Chưa có container nhập gần đây</li>
+        }
       </ul>
     </div>
   );
@@ -221,7 +244,11 @@ function ExportPanel({ onClose }: { onClose: () => void }) {
 // ─── Import panel ────────────────────────────────────────────────────────────
 type ImportStep = 'form' | 'suggestion' | 'manual';
 
-function ImportPanel({ onClose, initialCode }: { onClose: () => void; initialCode?: string }) {
+function ImportPanel({ onClose, initialCode, onPreviewChange }: {
+  onClose: () => void;
+  initialCode?: string;
+  onPreviewChange: (pos: PreviewPosition | null) => void;
+}) {
   const [step, setStep] = useState<ImportStep>('form');
   const [form, setForm] = useState({
     containerCode: initialCode ?? '',
@@ -230,21 +257,94 @@ function ImportPanel({ onClose, initialCode }: { onClose: () => void; initialCod
     exportDate: '',
     priority: 'Trung bình',
   });
-  const [manualZone, setManualZone]      = useState('Zone B');
+  const [suggestion, setSuggestion] = useState<SuggestedPosition | null>(null);
+  const [manualZone, setManualZone]      = useState('Zone A');
   const [manualWarehouse, setManualWH]   = useState('Kho Khô');
   const [manualFloor, setManualFloor]    = useState('1');
   const [manualPos, setManualPos]        = useState('CT01');
 
-  // Determine suggested warehouse based on cargo type
-  const suggestedWH = form.cargoType === 'Hàng Lạnh' ? 'Kho Lạnh'
-    : form.cargoType === 'Hàng dễ vỡ' ? 'Kho Hàng dễ vỡ'
-    : form.cargoType === 'Khác' ? 'Kho khác'
-    : 'Kho Khô';
+  // Clear preview on unmount
+  useEffect(() => {
+    return () => onPreviewChange(null);
+  }, [onPreviewChange]);
+
+  function handleGetSuggestion() {
+    const sug = findSuggestedPosition(form.cargoType);
+    setSuggestion(sug);
+    setStep('suggestion');
+
+    if (sug) {
+      setManualZone(sug.zone);
+      setManualWH(sug.whName);
+      setManualFloor(String(sug.floor));
+      setManualPos(sug.slot);
+      // Show ghost preview in 3D/2D
+      onPreviewChange({
+        whType: sug.whType,
+        zone: sug.zone,
+        floor: sug.floor,
+        row: sug.row,
+        col: sug.col,
+        sizeType: sug.sizeType,
+        containerCode: form.containerCode || 'Container mới',
+      });
+    }
+  }
+
+  function handleConfirmImport() {
+    const whType = suggestion?.whType ?? cargoTypeToWHType(form.cargoType);
+    const whName = suggestion?.whName ?? cargoTypeToWHName(form.cargoType);
+    const zone = step === 'manual' ? manualZone : (suggestion?.zone ?? 'Zone A');
+    const floor = step === 'manual' ? parseInt(manualFloor) : (suggestion?.floor ?? 1);
+    const row = suggestion?.row ?? 0;
+    const col = suggestion?.col ?? 0;
+    const slot = step === 'manual' ? manualPos : (suggestion?.slot ?? 'R1C1');
+
+    const today = new Date();
+    const dateStr = `${today.getDate().toString().padStart(2, '0')}/${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getFullYear()}`;
+
+    addImportedContainer({
+      code: form.containerCode || `CTN-${Date.now()}`,
+      cargoType: form.cargoType,
+      weight: form.weight,
+      whType,
+      whName,
+      zone,
+      floor,
+      row,
+      col,
+      slot,
+      sizeType: suggestion?.sizeType ?? '20ft',
+      importDate: dateStr,
+      exportDate: form.exportDate,
+      priority: form.priority,
+    });
+
+    onPreviewChange(null);
+    onClose();
+  }
+
+  function handleManualPositionChange(newZone: string, newFloor: string) {
+    // Update preview when manual position changes
+    const whType = cargoTypeToWHType(manualWarehouse === 'Kho Lạnh' ? 'Hàng Lạnh'
+      : manualWarehouse === 'Kho Hàng dễ vỡ' ? 'Hàng dễ vỡ'
+      : manualWarehouse === 'Kho khác' ? 'Khác' : 'Hàng Khô');
+
+    onPreviewChange({
+      whType,
+      zone: newZone,
+      floor: parseInt(newFloor),
+      row: suggestion?.row ?? 0,
+      col: suggestion?.col ?? 0,
+      sizeType: suggestion?.sizeType ?? '20ft',
+      containerCode: form.containerCode || 'Container mới',
+    });
+  }
 
   return (
     <div className="ov-right-panel">
       <div className="ov-rp-panel-header">
-        <button className="ov-rp-back-btn" onClick={step === 'form' ? onClose : () => setStep('form')}>
+        <button className="ov-rp-back-btn" onClick={step === 'form' ? () => { onPreviewChange(null); onClose(); } : () => { setStep('form'); onPreviewChange(null); }}>
           <ChevronLeft size={18} />
         </button>
         <h2 className="ov-rp-panel-title">Nhập Container</h2>
@@ -289,7 +389,7 @@ function ImportPanel({ onClose, initialCode }: { onClose: () => void; initialCod
                 </select>
               </div>
             </div>
-            <button className="btn-primary ov-rp-submit-btn" onClick={() => setStep('suggestion')}>
+            <button className="btn-primary ov-rp-submit-btn" onClick={handleGetSuggestion}>
               Nhận gợi ý vị trí
             </button>
           </>
@@ -302,30 +402,39 @@ function ImportPanel({ onClose, initialCode }: { onClose: () => void; initialCod
                 <div className="ov-rp-sug-icon"><Info size={16} /></div>
                 <span className="ov-rp-sug-title">Gợi ý vị trí</span>
               </div>
-              <div className="ov-rp-sug-row">
-                <span className="ov-rp-sug-label">Kho</span>
-                <span className="ov-rp-sug-value ov-rp-blue">{suggestedWH}</span>
-              </div>
-              <div className="ov-rp-sug-row">
-                <span className="ov-rp-sug-label">Vị trí</span>
-                <span className="ov-rp-sug-value ov-rp-blue">Zone B - Tầng 3 - CT01</span>
-              </div>
-              <div className="ov-rp-sug-row">
-                <span className="ov-rp-sug-label">Hiệu quả tối ưu</span>
-                <span className="ov-rp-sug-value ov-rp-blue">94%</span>
-              </div>
-              <div className="ov-rp-sug-row">
-                <span className="ov-rp-sug-label">Container đảo chuyển</span>
-                <span className="ov-rp-sug-value ov-rp-blue">0</span>
-              </div>
+              {suggestion ? (
+                <>
+                  <div className="ov-rp-sug-row">
+                    <span className="ov-rp-sug-label">Kho</span>
+                    <span className="ov-rp-sug-value ov-rp-blue">{suggestion.whName}</span>
+                  </div>
+                  <div className="ov-rp-sug-row">
+                    <span className="ov-rp-sug-label">Vị trí</span>
+                    <span className="ov-rp-sug-value ov-rp-blue">{suggestion.zone} - Tầng {suggestion.floor} - {suggestion.slot}</span>
+                  </div>
+                  <div className="ov-rp-sug-row">
+                    <span className="ov-rp-sug-label">Hiệu quả tối ưu</span>
+                    <span className="ov-rp-sug-value ov-rp-blue">{suggestion.efficiency}%</span>
+                  </div>
+                  <div className="ov-rp-sug-row">
+                    <span className="ov-rp-sug-label">Container đảo chuyển</span>
+                    <span className="ov-rp-sug-value ov-rp-blue">{suggestion.moves}</span>
+                  </div>
+                </>
+              ) : (
+                <div className="ov-rp-sug-row">
+                  <span className="ov-rp-sug-label">Không tìm thấy vị trí trống phù hợp</span>
+                </div>
+              )}
             </div>
 
             {step === 'suggestion' && (
               <>
-                <button className="btn-primary ov-rp-submit-btn" onClick={() => setStep('manual')}>
+                <button className="btn-primary ov-rp-submit-btn" onClick={handleConfirmImport}>
                   Xác nhận nhập
                 </button>
-                <button className="ov-rp-cancel-link" onClick={onClose}>Hủy</button>
+                <button className="ov-rp-cancel-link" onClick={() => setStep('manual')}>Điều chỉnh thủ công</button>
+                <button className="ov-rp-cancel-link" onClick={() => { onPreviewChange(null); onClose(); }}>Hủy</button>
               </>
             )}
 
@@ -333,9 +442,9 @@ function ImportPanel({ onClose, initialCode }: { onClose: () => void; initialCod
               <>
                 <div className="ov-rp-manual-title">Điều chỉnh vị trí thủ công</div>
                 {[
-                  { label: 'Khu nhập', value: manualZone, setter: setManualZone, options: ['Zone A','Zone B','Zone C'] },
+                  { label: 'Khu nhập', value: manualZone, setter: (v: string) => { setManualZone(v); handleManualPositionChange(v, manualFloor); }, options: ['Zone A','Zone B','Zone C'] },
                   { label: 'Kho nhập', value: manualWarehouse, setter: setManualWH, options: ['Kho Khô','Kho Lạnh','Kho Hàng dễ vỡ','Kho khác'] },
-                  { label: 'Tầng', value: manualFloor, setter: setManualFloor, options: ['1','2','3'] },
+                  { label: 'Tầng', value: manualFloor, setter: (v: string) => { setManualFloor(v); handleManualPositionChange(manualZone, v); }, options: ['1','2','3'] },
                 ].map(({ label, value, setter, options }) => (
                   <div key={label} className="ov-rp-field">
                     <label>{label}</label>
@@ -351,7 +460,7 @@ function ImportPanel({ onClose, initialCode }: { onClose: () => void; initialCod
                   <input type="text" value={manualPos}
                     onChange={(e) => setManualPos(e.target.value)} className="ov-rp-input" />
                 </div>
-                <button className="btn-primary ov-rp-submit-btn" onClick={onClose}>Xác nhận nhập</button>
+                <button className="btn-primary ov-rp-submit-btn" onClick={handleConfirmImport}>Xác nhận nhập</button>
               </>
             )}
           </>
@@ -369,6 +478,7 @@ export function WarehouseOverview() {
   const [selectedZone, setSelectedZone]  = useState<ZoneInfo | null>(null);
   const [selectedCode, setSelectedCode]  = useState<string | undefined>(undefined);
   const [searchTerm, setSearchTerm]      = useState('');
+  const [previewPosition, setPreviewPosition] = useState<PreviewPosition | null>(null);
   const sceneRef = useRef<OverviewSceneHandle>(null);
   const navigate = useNavigate();
 
@@ -381,6 +491,7 @@ export function WarehouseOverview() {
     setPanelMode(null);
     setSelectedZone(null);
     setSelectedCode(undefined);
+    setPreviewPosition(null);
   }
 
   function openWaiting() {
@@ -444,7 +555,8 @@ export function WarehouseOverview() {
         <div className="ov-content-row">
           <div className="ov-canvas-wrap">
             <OverviewScene ref={sceneRef} onZoneClick={handleZoneClick}
-              highlightId={searchTerm.trim() || undefined} />
+              highlightId={searchTerm.trim() || undefined}
+              previewPosition={previewPosition} />
             <div className="ov-controls">
               <button className="ov-ctrl-btn" aria-label="Zoom in"   onClick={() => sceneRef.current?.zoomIn()}>   <ZoomIn  size={18} /></button>
               <button className="ov-ctrl-btn" aria-label="Zoom out"  onClick={() => sceneRef.current?.zoomOut()}>  <ZoomOut size={18} /></button>
@@ -457,7 +569,7 @@ export function WarehouseOverview() {
             <WaitingListPanel onClose={closePanel} onSelect={selectContainer} />
           )}
           {panelMode === 'import' && (
-            <ImportPanel onClose={closePanel} initialCode={selectedCode} />
+            <ImportPanel onClose={closePanel} initialCode={selectedCode} onPreviewChange={setPreviewPosition} />
           )}
           {panelMode === 'export' && (
             <ExportPanel onClose={closePanel} />

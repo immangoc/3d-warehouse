@@ -84,83 +84,75 @@ function cargoTypeToWHName(cargoType: string): string {
   return wh?.name ?? 'Kho Khô';
 }
 
-export function findSuggestedPosition(cargoType: string): SuggestedPosition | null {
+export function findSuggestedPosition(cargoType: string, preferredSize: '20ft' | '40ft' = '20ft'): SuggestedPosition | null {
   const whType = cargoTypeToWHType(cargoType);
   const whName = cargoTypeToWHName(cargoType);
 
-  // Search zones in order, prefer lower floors, find first empty slot
+  // Search zones in order, prefer lower floors, find first empty slot matching preferred size
   for (const zone of ZONES) {
     for (let floor = 1; floor <= 3; floor++) {
       const grid = getGridForFloor(whType, zone, floor);
 
-      // Check 20ft slots (cols 0-3) – need support from below
-      for (let row = 0; row < 4; row++) {
-        for (let col = 0; col < 4; col++) {
-          if (grid[row][col]) continue; // already filled
+      if (preferredSize === '20ft') {
+        // Check 20ft slots (cols 0-3)
+        for (let row = 0; row < 4; row++) {
+          for (let col = 0; col < 4; col++) {
+            if (grid[row][col]) continue;
+            if (floor > 1) {
+              const belowGrid = getGridForFloor(whType, zone, floor - 1);
+              if (!belowGrid[row][col]) continue;
+            }
+            const taken = importedContainers.some(
+              (c) => c.whType === whType && c.zone === zone && c.floor === floor && c.row === row && c.col === col
+            );
+            if (taken) continue;
 
-          // For floor > 1, check if there's support below
-          if (floor > 1) {
-            const belowGrid = getGridForFloor(whType, zone, floor - 1);
-            if (!belowGrid[row][col]) continue;
+            const efficiency = Math.round(85 + Math.random() * 12);
+            return {
+              whType, whName, zone, floor, row, col,
+              slot: `R${row + 1}C${col + 1}`,
+              sizeType: '20ft',
+              efficiency,
+              moves: 0,
+            };
           }
-
-          // Check this slot isn't already taken by an imported container
-          const taken = importedContainers.some(
-            (c) => c.whType === whType && c.zone === zone && c.floor === floor && c.row === row && c.col === col
-          );
-          if (taken) continue;
-
-          const efficiency = Math.round(85 + Math.random() * 12);
-          return {
-            whType,
-            whName,
-            zone,
-            floor,
-            row,
-            col,
-            slot: `R${row + 1}C${col + 1}`,
-            sizeType: '20ft',
-            efficiency,
-            moves: floor > 1 ? 0 : 0,
-          };
         }
-      }
+      } else {
+        // Check 40ft slots (cols 4-7)
+        for (let groupIdx = 0; groupIdx < 2; groupIdx++) {
+          const baseRow = groupIdx * 2;
+          for (let col = 4; col < 8; col++) {
+            if (grid[baseRow][col]) continue;
+            if (floor > 1) {
+              const belowGrid = getGridForFloor(whType, zone, floor - 1);
+              if (!belowGrid[baseRow][col]) continue;
+            }
+            const taken = importedContainers.some(
+              (c) => c.whType === whType && c.zone === zone && c.floor === floor && c.row === baseRow && c.col === col
+            );
+            if (taken) continue;
 
-      // Check 40ft slots (cols 4-7)
-      for (let groupIdx = 0; groupIdx < 2; groupIdx++) {
-        const baseRow = groupIdx * 2;
-        for (let col = 4; col < 8; col++) {
-          if (grid[baseRow][col]) continue;
-
-          if (floor > 1) {
-            const belowGrid = getGridForFloor(whType, zone, floor - 1);
-            if (!belowGrid[baseRow][col]) continue;
+            const efficiency = Math.round(85 + Math.random() * 12);
+            return {
+              whType, whName, zone, floor,
+              row: baseRow, col,
+              slot: `R${baseRow + 1}-R${baseRow + 2}C${col + 1}`,
+              sizeType: '40ft',
+              efficiency,
+              moves: 0,
+            };
           }
-
-          const taken = importedContainers.some(
-            (c) => c.whType === whType && c.zone === zone && c.floor === floor && c.row === baseRow && c.col === col
-          );
-          if (taken) continue;
-
-          const efficiency = Math.round(85 + Math.random() * 12);
-          return {
-            whType,
-            whName,
-            zone,
-            floor,
-            row: baseRow,
-            col,
-            slot: `R${baseRow + 1}-R${baseRow + 2}C${col + 1}`,
-            sizeType: '40ft',
-            efficiency,
-            moves: 0,
-          };
         }
       }
     }
   }
 
   return null;
+}
+
+/** Get imported containers for a specific zone */
+export function getImportedForZone(whType: WHType, zoneName: string): ImportedContainer[] {
+  return importedContainers.filter((c) => c.whType === whType && c.zone === zoneName);
 }
 
 export { cargoTypeToWHType, cargoTypeToWHName };

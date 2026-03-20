@@ -1,4 +1,4 @@
-import { Suspense, useRef, useMemo, forwardRef, useImperativeHandle } from 'react';
+import { Suspense, useRef, useMemo, forwardRef, useImperativeHandle, useSyncExternalStore } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, Environment, ContactShadows, Text } from '@react-three/drei';
 import * as THREE from 'three';
@@ -9,6 +9,7 @@ import {
   WH_MAP, getGrid, countFilledSlots,
 } from '../../data/warehouse';
 import type { WHType, ZoneInfo, PreviewPosition } from '../../data/warehouse';
+import { subscribe, getImportedContainers } from '../../data/containerStore';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface OverviewSceneHandle {
@@ -81,6 +82,13 @@ function ZoneBlock({ position, zoneName, whType, onClick, highlightId, previewPo
   const grid = useMemo(() => getGrid(whType, zoneName), [whType, zoneName]);
   const filledCount = useMemo(() => countFilledSlots(whType, zoneName), [whType, zoneName]);
   const isWarning = filledCount / TOTAL_SLOTS >= WARNING_THRESHOLD;
+
+  // Imported containers from store
+  const allImported = useSyncExternalStore(subscribe, getImportedContainers);
+  const importedForZone = useMemo(
+    () => allImported.filter((c) => c.whType === whType && c.zone === zoneName),
+    [allImported, whType, zoneName]
+  );
 
   const containers = useMemo(() => {
     const items: {
@@ -179,6 +187,30 @@ function ZoneBlock({ position, zoneName, whType, onClick, highlightId, previewPo
           zone={zoneName.replace('Zone ', '')} floor={ctn.floor} slot={ctn.slot}
           highlightId={highlightId} />
       ))}
+
+      {/* Imported containers (from store) */}
+      {importedForZone.map((ic) => {
+        const is40ft = ic.sizeType === '40ft';
+        const y = (ic.floor - 1) * CTN_H + CTN_H / 2;
+        const x = colX(ic.col);
+        const z = is40ft
+          ? (rowZ(ic.row) + rowZ(ic.row + 1)) / 2
+          : rowZ(ic.row);
+        return (
+          <ContainerBlock
+            key={`imported-${ic.code}`}
+            id={ic.code}
+            position={[x, y, z]}
+            status={wh.status}
+            sizeType={ic.sizeType}
+            colorSeed={Date.parse('2026-01-01') + ic.code.length * 137}
+            zone={zoneName.replace('Zone ', '')}
+            floor={ic.floor}
+            slot={ic.slot}
+            highlightId={highlightId}
+          />
+        );
+      })}
 
       {/* Ghost container preview */}
       {previewPosition && previewPosition.zone === zoneName && (() => {

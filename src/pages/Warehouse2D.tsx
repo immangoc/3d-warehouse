@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   Search, Plus, ChevronLeft, ChevronRight, ChevronDown,
   Snowflake, Package, AlertTriangle, Layers,
@@ -9,38 +9,53 @@ import {
   ZONES, WAREHOUSES, WH_STATS,
   WAITING_CONTAINERS, getGridForFloor, getSlotInfo,
 } from '../data/warehouse';
-import type { WHType, WHConfig, SlotInfo } from '../data/warehouse';
+import type { WHType, WHConfig, SlotInfo, PreviewPosition } from '../data/warehouse';
+import {
+  findSuggestedPosition, addImportedContainer,
+  cargoTypeToWHType, cargoTypeToWHName,
+} from '../data/containerStore';
+import type { SuggestedPosition } from '../data/containerStore';
 import './Warehouse2D.css';
 
 // ─── Slot with tooltip ──────────────────────────────────────────────────────
-function Slot({ info, color, emptyColor, isHL, onClickSlot }: {
+function Slot({ info, color, emptyColor, isHL, isGhost, onClickSlot }: {
   info: SlotInfo;
   color: string;
   emptyColor: string;
   isHL: boolean;
+  isGhost?: boolean;
   onClickSlot?: (info: SlotInfo) => void;
 }) {
   const [hovered, setHovered] = useState(false);
   return (
     <div className="slot-wrapper">
       <div
-        className={`slot ${info.type === '40ft' ? 'slot-40' : 'slot-20'} ${info.filled ? 'slot-filled' : 'slot-empty'} ${isHL ? 'slot-hl' : ''}`}
+        className={`slot ${info.type === '40ft' ? 'slot-40' : 'slot-20'} ${info.filled ? 'slot-filled' : 'slot-empty'} ${isHL ? 'slot-hl' : ''} ${isGhost ? 'slot-ghost' : ''}`}
         style={{
-          backgroundColor: isHL ? `${color}20` : info.filled ? color : emptyColor,
-          borderColor: isHL ? color : 'transparent',
+          backgroundColor: isGhost ? `${color}30` : isHL ? `${color}20` : info.filled ? color : emptyColor,
+          borderColor: isGhost ? color : isHL ? color : 'transparent',
           color: info.filled ? '#fff' : color,
+          borderWidth: isGhost ? '2px' : undefined,
+          borderStyle: isGhost ? 'dashed' : undefined,
+          animation: isGhost ? 'ghostPulse 1.5s ease-in-out infinite' : undefined,
         }}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         onClick={() => onClickSlot?.(info)}
       >
-        {info.label}
+        {isGhost ? '⬚' : info.label}
       </div>
-      {hovered && info.filled && (
+      {hovered && info.filled && !isGhost && (
         <div className="slot-tooltip">
           <div className="slot-tooltip-row"><strong>{info.cargo}</strong></div>
           <div className="slot-tooltip-row">{info.weight} · {info.temp}</div>
           <div className="slot-tooltip-row">{info.type} container</div>
+        </div>
+      )}
+      {hovered && isGhost && (
+        <div className="slot-tooltip">
+          <div className="slot-tooltip-row"><strong>Vị trí gợi ý</strong></div>
+          <div className="slot-tooltip-row">Container sẽ được đặt tại đây</div>
         </div>
       )}
     </div>
@@ -48,30 +63,28 @@ function Slot({ info, color, emptyColor, isHL, onClickSlot }: {
 }
 
 // ─── Rack rendering ──────────────────────────────────────────────────────────
-// A "rack" is a 2-col × 2-row visual block of container slots
-// For 40ft: containers are stacked vertically (1 per row)
-function Rack({ rows, colStart, color, emptyColor, highlighted, is40ft, seedBase, onClickSlot }: {
+function Rack({ rows, colStart, color, emptyColor, highlighted, ghostPos, is40ft, seedBase, onClickSlot }: {
   rows: boolean[][];
   colStart: number;
   color: string;
   emptyColor: string;
   highlighted?: { row: number; col: number } | null;
+  ghostPos?: { row: number; col: number } | null;
   is40ft: boolean;
   seedBase: number;
   onClickSlot?: (info: SlotInfo) => void;
 }) {
   if (is40ft) {
-    // Horizontal row of 2 tall containers, each spanning 2 rows of 20ft height
-    // Only use first row's data (each 40ft occupies the space of 2 vertical 20ft slots)
     return (
       <div className="rack rack-40ft">
         {[0, 1].map((ci) => {
           const absCol = colStart + ci;
           const filled = rows[0][absCol];
           const isHL = highlighted?.row === 0 && highlighted?.col === absCol;
+          const isGhost = ghostPos?.row === 0 && ghostPos?.col === absCol;
           const info = getSlotInfo(filled, is40ft, seedBase + absCol);
           return (
-            <Slot key={ci} info={info} color={color} emptyColor={emptyColor} isHL={isHL} onClickSlot={onClickSlot} />
+            <Slot key={ci} info={info} color={color} emptyColor={emptyColor} isHL={isHL} isGhost={isGhost} onClickSlot={onClickSlot} />
           );
         })}
       </div>
@@ -86,9 +99,10 @@ function Rack({ rows, colStart, color, emptyColor, highlighted, is40ft, seedBase
             const absCol = colStart + ci;
             const filled = row[absCol];
             const isHL = highlighted?.row === ri && highlighted?.col === absCol;
+            const isGhost = ghostPos?.row === ri && ghostPos?.col === absCol;
             const info = getSlotInfo(filled, is40ft, seedBase + ri * 10 + absCol);
             return (
-              <Slot key={ci} info={info} color={color} emptyColor={emptyColor} isHL={isHL} onClickSlot={onClickSlot} />
+              <Slot key={ci} info={info} color={color} emptyColor={emptyColor} isHL={isHL} isGhost={isGhost} onClickSlot={onClickSlot} />
             );
           })}
         </div>
@@ -97,18 +111,16 @@ function Rack({ rows, colStart, color, emptyColor, highlighted, is40ft, seedBase
   );
 }
 
-function SlotGrid({ grid, color, emptyColor, highlighted, animDir, onClickSlot }: {
+function SlotGrid({ grid, color, emptyColor, highlighted, ghostPos, animDir, onClickSlot }: {
   grid: boolean[][];
   color: string;
   emptyColor: string;
   highlighted?: { row: number; col: number } | null;
+  ghostPos?: { row: number; col: number } | null;
   animDir?: 'left' | 'right' | null;
   onClickSlot?: (info: SlotInfo) => void;
 }) {
-  // Split into 2 row groups of 2 rows each
   const rowGroups = [grid.slice(0, 2), grid.slice(2, 4)];
-
-  // Column pairs for racks: left block [0-1, 2-3] (20ft), right block [4-5, 6-7] (40ft)
   const leftPairs = [0, 2];
   const rightPairs = [4, 6];
 
@@ -120,17 +132,20 @@ function SlotGrid({ grid, color, emptyColor, highlighted, animDir, onClickSlot }
         const hlInGroup = highlighted && (gi === 0 ? highlighted.row < 2 : highlighted.row >= 2)
           ? { row: highlighted.row - gi * 2, col: highlighted.col }
           : null;
+        const ghostInGroup = ghostPos && (gi === 0 ? ghostPos.row < 2 : ghostPos.row >= 2)
+          ? { row: ghostPos.row - gi * 2, col: ghostPos.col }
+          : null;
         return (
           <div key={gi} className="rack-row-group">
             <div className="rack-block">
               {leftPairs.map((cs) => (
-                <Rack key={cs} rows={rg} colStart={cs} color={color} emptyColor={emptyColor} highlighted={hlInGroup} is40ft={false} seedBase={gi * 100 + cs} onClickSlot={onClickSlot} />
+                <Rack key={cs} rows={rg} colStart={cs} color={color} emptyColor={emptyColor} highlighted={hlInGroup} ghostPos={ghostInGroup} is40ft={false} seedBase={gi * 100 + cs} onClickSlot={onClickSlot} />
               ))}
             </div>
             <div className="rack-gap" />
             <div className="rack-block">
               {rightPairs.map((cs) => (
-                <Rack key={cs} rows={rg} colStart={cs} color={color} emptyColor={emptyColor} highlighted={hlInGroup} is40ft={true} seedBase={gi * 100 + cs + 50} onClickSlot={onClickSlot} />
+                <Rack key={cs} rows={rg} colStart={cs} color={color} emptyColor={emptyColor} highlighted={hlInGroup} ghostPos={ghostInGroup} is40ft={true} seedBase={gi * 100 + cs + 50} onClickSlot={onClickSlot} />
               ))}
             </div>
           </div>
@@ -208,9 +223,12 @@ function ContainerModal({ info, onClose }: { info: SlotInfo; onClose: () => void
 }
 
 // ─── Warehouse card ───────────────────────────────────────────────────────────
-function WarehouseCard({ wh, highlight }: {
+function WarehouseCard({ wh, highlight, ghostPos, ghostZone, ghostFloor }: {
   wh: WHConfig;
   highlight?: { row: number; col: number } | null;
+  ghostPos?: { row: number; col: number } | null;
+  ghostZone?: string;
+  ghostFloor?: number;
 }) {
   const [zoneIdx, setZoneIdx] = useState(0);
   const [floor, setFloor] = useState(1);
@@ -218,6 +236,9 @@ function WarehouseCard({ wh, highlight }: {
   const [animDir, setAnimDir] = useState<'left' | 'right' | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<SlotInfo | null>(null);
   const grid = getGridForFloor(wh.id, ZONES[zoneIdx], floor);
+
+  // Only show ghost on matching zone and floor
+  const showGhost = ghostPos && ghostZone === ZONES[zoneIdx] && ghostFloor === floor;
 
   const navigateZone = useCallback((dir: 'left' | 'right') => {
     setAnimDir(dir);
@@ -273,7 +294,8 @@ function WarehouseCard({ wh, highlight }: {
         <button className="wh-nav-btn" onClick={() => navigateZone('left')}>
           <ChevronLeft size={15} />
         </button>
-        <SlotGrid grid={grid} color={wh.color} emptyColor={wh.emptyColor} highlighted={highlight} animDir={animDir} onClickSlot={setSelectedSlot} />
+        <SlotGrid grid={grid} color={wh.color} emptyColor={wh.emptyColor} highlighted={highlight}
+          ghostPos={showGhost ? ghostPos : null} animDir={animDir} onClickSlot={setSelectedSlot} />
         <button className="wh-nav-btn" onClick={() => navigateZone('right')}>
           <ChevronRight size={15} />
         </button>
@@ -285,7 +307,7 @@ function WarehouseCard({ wh, highlight }: {
           {floors.map((f) => (
             <button
               key={f}
-              className={`wh-floor-btn ${f === floor ? 'wh-floor-btn-active' : ''}`}
+              className={`wh-floor-btn ${f === floor ? 'wh-floor-btn-active' : ''} ${ghostFloor === f && ghostZone === ZONES[zoneIdx] ? 'wh-floor-btn-ghost' : ''}`}
               style={{ '--wh-color': wh.color } as React.CSSProperties}
               onClick={() => setFloor(f)}
             >
@@ -324,27 +346,111 @@ function WaitingListPanel({ onClose, onSelect }: {
   );
 }
 
-function ImportPanel({ onClose, initialCode }: { onClose: () => void; initialCode?: string }) {
-  const [step, setStep] = useState<'form' | 'suggestion'>('form');
+function ImportPanel({ onClose, initialCode, onPreviewChange }: {
+  onClose: () => void;
+  initialCode?: string;
+  onPreviewChange: (pos: PreviewPosition | null) => void;
+}) {
+  const [step, setStep] = useState<'form' | 'suggestion' | 'manual'>('form');
   const [form, setForm] = useState({
-    containerCode: initialCode ?? 'CTN-2026-1234',
+    containerCode: initialCode ?? '',
     cargoType: 'Hàng Khô',
-    weight: '25 tấn',
-    exportDate: '2026-08-15',
+    weight: '',
+    exportDate: '',
     priority: 'Cao',
   });
+  const [suggestion, setSuggestion] = useState<SuggestedPosition | null>(null);
+  const [manualZone, setManualZone]      = useState('Zone A');
+  const [manualWarehouse, setManualWH]   = useState('Kho Khô');
+  const [manualFloor, setManualFloor]    = useState('1');
+  const [manualPos, setManualPos]        = useState('CT01');
+
+  useEffect(() => {
+    return () => onPreviewChange(null);
+  }, [onPreviewChange]);
+
+  function handleGetSuggestion() {
+    const sug = findSuggestedPosition(form.cargoType);
+    setSuggestion(sug);
+    setStep('suggestion');
+
+    if (sug) {
+      setManualZone(sug.zone);
+      setManualWH(sug.whName);
+      setManualFloor(String(sug.floor));
+      setManualPos(sug.slot);
+      onPreviewChange({
+        whType: sug.whType,
+        zone: sug.zone,
+        floor: sug.floor,
+        row: sug.row,
+        col: sug.col,
+        sizeType: sug.sizeType,
+        containerCode: form.containerCode || 'Container mới',
+      });
+    }
+  }
+
+  function handleConfirmImport() {
+    const whType = suggestion?.whType ?? cargoTypeToWHType(form.cargoType);
+    const whName = suggestion?.whName ?? cargoTypeToWHName(form.cargoType);
+    const zone = step === 'manual' ? manualZone : (suggestion?.zone ?? 'Zone A');
+    const floor = step === 'manual' ? parseInt(manualFloor) : (suggestion?.floor ?? 1);
+    const slot = step === 'manual' ? manualPos : (suggestion?.slot ?? 'R1C1');
+
+    const today = new Date();
+    const dateStr = `${today.getDate().toString().padStart(2, '0')}/${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getFullYear()}`;
+
+    addImportedContainer({
+      code: form.containerCode || `CTN-${Date.now()}`,
+      cargoType: form.cargoType,
+      weight: form.weight,
+      whType,
+      whName,
+      zone,
+      floor,
+      row: suggestion?.row ?? 0,
+      col: suggestion?.col ?? 0,
+      slot,
+      sizeType: suggestion?.sizeType ?? '20ft',
+      importDate: dateStr,
+      exportDate: form.exportDate,
+      priority: form.priority,
+    });
+
+    onPreviewChange(null);
+    onClose();
+  }
+
+  function handleManualPositionChange(newZone: string, newFloor: string) {
+    const whType = cargoTypeToWHType(manualWarehouse === 'Kho Lạnh' ? 'Hàng Lạnh'
+      : manualWarehouse === 'Kho Hàng dễ vỡ' ? 'Hàng dễ vỡ'
+      : manualWarehouse === 'Kho khác' ? 'Khác' : 'Hàng Khô');
+
+    onPreviewChange({
+      whType,
+      zone: newZone,
+      floor: parseInt(newFloor),
+      row: suggestion?.row ?? 0,
+      col: suggestion?.col ?? 0,
+      sizeType: suggestion?.sizeType ?? '20ft',
+      containerCode: form.containerCode || 'Container mới',
+    });
+  }
 
   return (
     <div className="w2d-right-panel">
       <div className="rp-import-header">
-        <button className="rp-back-btn" onClick={onClose}><ChevronLeft size={18} /></button>
+        <button className="rp-back-btn" onClick={step === 'form' ? () => { onPreviewChange(null); onClose(); } : () => { setStep('form'); onPreviewChange(null); }}>
+          <ChevronLeft size={18} />
+        </button>
         <h2 className="rp-import-title">Nhập Container</h2>
       </div>
       <div className="rp-import-body">
         {step === 'form' && (
           <>
             <div className="rp-field"><label>Mã số container</label>
-              <input type="text" value={form.containerCode}
+              <input type="text" value={form.containerCode} placeholder="VD: CTN-2026-1234"
                 onChange={(e) => setForm({ ...form, containerCode: e.target.value })} /></div>
             <div className="rp-field"><label>Loại hàng</label>
               <div className="rp-select-wrap">
@@ -356,7 +462,7 @@ function ImportPanel({ onClose, initialCode }: { onClose: () => void; initialCod
               </div>
             </div>
             <div className="rp-field"><label>Trọng lượng</label>
-              <input type="text" value={form.weight}
+              <input type="text" value={form.weight} placeholder="VD: 25 tấn"
                 onChange={(e) => setForm({ ...form, weight: e.target.value })} /></div>
             <div className="rp-field"><label>Ngày xuất (dự kiến)</label>
               <div className="rp-date-wrap">
@@ -366,34 +472,80 @@ function ImportPanel({ onClose, initialCode }: { onClose: () => void; initialCod
               </div>
             </div>
             <div className="rp-field"><label>Mức độ ưu tiên</label>
-              <span className="rp-priority-value">{form.priority}</span></div>
-            <button className="btn-primary rp-submit-btn" onClick={() => setStep('suggestion')}>
+              <div className="rp-select-wrap">
+                <select value={form.priority}
+                  onChange={(e) => setForm({ ...form, priority: e.target.value })}>
+                  <option>Cao</option><option>Trung bình</option><option>Thấp</option>
+                </select>
+              </div>
+            </div>
+            <button className="btn-primary rp-submit-btn" onClick={handleGetSuggestion}>
               Nhận gợi ý vị trí
             </button>
           </>
         )}
-        {step === 'suggestion' && (
+        {(step === 'suggestion' || step === 'manual') && (
           <>
             <div className="rp-suggestion-card">
               <div className="rp-sug-header">
                 <div className="rp-sug-icon"><Info size={16} /></div>
                 <span className="rp-sug-title">Gợi ý vị trí</span>
               </div>
-              <div className="rp-sug-row">
-                <span className="rp-sug-label">Vị trí</span>
-                <span className="rp-sug-value rp-blue">Zone B - Kho Khô<br />Tầng 3 - CT01</span>
-              </div>
-              <div className="rp-sug-row">
-                <span className="rp-sug-label">Hiệu quả tối ưu</span>
-                <span className="rp-sug-value rp-blue">94%</span>
-              </div>
-              <div className="rp-sug-row">
-                <span className="rp-sug-label">Số Container<br />đảo chuyển</span>
-                <span className="rp-sug-value rp-blue">0</span>
-              </div>
+              {suggestion ? (
+                <>
+                  <div className="rp-sug-row">
+                    <span className="rp-sug-label">Vị trí</span>
+                    <span className="rp-sug-value rp-blue">{suggestion.zone} - {suggestion.whName}<br />Tầng {suggestion.floor} - {suggestion.slot}</span>
+                  </div>
+                  <div className="rp-sug-row">
+                    <span className="rp-sug-label">Hiệu quả tối ưu</span>
+                    <span className="rp-sug-value rp-blue">{suggestion.efficiency}%</span>
+                  </div>
+                  <div className="rp-sug-row">
+                    <span className="rp-sug-label">Số Container<br />đảo chuyển</span>
+                    <span className="rp-sug-value rp-blue">{suggestion.moves}</span>
+                  </div>
+                </>
+              ) : (
+                <div className="rp-sug-row">
+                  <span className="rp-sug-label">Không tìm thấy vị trí trống</span>
+                </div>
+              )}
             </div>
-            <button className="btn-primary rp-submit-btn">Xác nhận nhập</button>
-            <button className="rp-cancel-link" onClick={onClose}>Hủy</button>
+
+            {step === 'suggestion' && (
+              <>
+                <button className="btn-primary rp-submit-btn" onClick={handleConfirmImport}>Xác nhận nhập</button>
+                <button className="rp-cancel-link" onClick={() => setStep('manual')}>Điều chỉnh thủ công</button>
+                <button className="rp-cancel-link" onClick={() => { onPreviewChange(null); onClose(); }}>Hủy</button>
+              </>
+            )}
+
+            {step === 'manual' && (
+              <>
+                <div className="rp-manual-title">Điều chỉnh vị trí thủ công</div>
+                {[
+                  { label: 'Khu nhập', value: manualZone, setter: (v: string) => { setManualZone(v); handleManualPositionChange(v, manualFloor); }, options: ['Zone A','Zone B','Zone C'] },
+                  { label: 'Kho nhập', value: manualWarehouse, setter: setManualWH, options: ['Kho Khô','Kho Lạnh','Kho Hàng dễ vỡ','Kho khác'] },
+                  { label: 'Tầng', value: manualFloor, setter: (v: string) => { setManualFloor(v); handleManualPositionChange(manualZone, v); }, options: ['1','2','3'] },
+                ].map(({ label, value, setter, options }) => (
+                  <div key={label} className="rp-field">
+                    <label>{label}</label>
+                    <div className="rp-select-wrap">
+                      <select value={value} onChange={(e) => setter(e.target.value)}>
+                        {options.map((o) => <option key={o}>{o}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                ))}
+                <div className="rp-field">
+                  <label>Vị trí</label>
+                  <input type="text" value={manualPos}
+                    onChange={(e) => setManualPos(e.target.value)} />
+                </div>
+                <button className="btn-primary rp-submit-btn" onClick={handleConfirmImport}>Xác nhận nhập</button>
+              </>
+            )}
           </>
         )}
       </div>
@@ -407,10 +559,9 @@ type PanelMode = null | 'waiting-list' | 'import';
 export function Warehouse2D() {
   const [panelMode, setPanelMode] = useState<PanelMode>(null);
   const [selectedCode, setCode]   = useState<string | undefined>(undefined);
+  const [previewPosition, setPreviewPosition] = useState<PreviewPosition | null>(null);
   function selectContainer(code: string) { setCode(code); setPanelMode('import'); }
-  function closePanel() { setPanelMode(null); setCode(undefined); }
-
-  const sugHL = panelMode === 'import' ? { row: 0, col: 5 } : null;
+  function closePanel() { setPanelMode(null); setCode(undefined); setPreviewPosition(null); }
 
   return (
     <DashboardLayout>
@@ -431,7 +582,7 @@ export function Warehouse2D() {
               <div className="ctn-card-icon"><Truck size={20} /></div>
               <div className="ctn-card-text">
                 <span className="ctn-card-label">Container chờ nhập kho</span>
-                <span className="ctn-card-sub">Container CNT-2024-001</span>
+                <span className="ctn-card-sub">{WAITING_CONTAINERS.length} container đang chờ</span>
               </div>
               <ChevronRight size={17} className="ctn-card-chevron" />
             </button>
@@ -452,7 +603,9 @@ export function Warehouse2D() {
               <WarehouseCard
                 key={wh.id}
                 wh={wh}
-                highlight={wh.id === 'dry' && panelMode === 'import' ? sugHL : null}
+                ghostPos={previewPosition && previewPosition.whType === wh.id ? { row: previewPosition.row, col: previewPosition.col } : null}
+                ghostZone={previewPosition && previewPosition.whType === wh.id ? previewPosition.zone : undefined}
+                ghostFloor={previewPosition && previewPosition.whType === wh.id ? previewPosition.floor : undefined}
               />
             ))}
           </div>
@@ -461,7 +614,7 @@ export function Warehouse2D() {
             <WaitingListPanel onClose={closePanel} onSelect={selectContainer} />
           )}
           {panelMode === 'import' && (
-            <ImportPanel onClose={closePanel} initialCode={selectedCode} />
+            <ImportPanel onClose={closePanel} initialCode={selectedCode} onPreviewChange={setPreviewPosition} />
           )}
         </div>
       </div>

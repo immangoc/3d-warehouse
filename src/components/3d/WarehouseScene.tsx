@@ -3,11 +3,12 @@ import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, Environment, ContactShadows, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import { ContainerBlock } from './ContainerBlock';
+import { GhostContainer } from './GhostContainer';
 import {
   ZONES, TOTAL_SLOTS, WARNING_THRESHOLD,
   WH_MAP, getGrid, countFilledSlots,
 } from '../../data/warehouse';
-import type { WHType, ZoneInfo } from '../../data/warehouse';
+import type { WHType, ZoneInfo, PreviewPosition } from '../../data/warehouse';
 
 // Re-export types and values used by other files
 export type { WHType, ZoneInfo };
@@ -92,9 +93,10 @@ interface ZoneBlockProps {
   whType: WHType;
   onClick: () => void;
   highlightId?: string;
+  previewPosition?: PreviewPosition | null;
 }
 
-function ZoneBlock({ position, zoneName, whType, onClick, highlightId }: ZoneBlockProps) {
+function ZoneBlock({ position, zoneName, whType, onClick, highlightId, previewPosition }: ZoneBlockProps) {
   const wh = WH_MAP[whType];
   const grid = useMemo(() => getGrid(whType, zoneName), [whType, zoneName]);
   const filledCount = useMemo(() => countFilledSlots(whType, zoneName), [whType, zoneName]);
@@ -245,6 +247,31 @@ function ZoneBlock({ position, zoneName, whType, onClick, highlightId }: ZoneBlo
         />
       ))}
 
+      {/* Ghost container preview */}
+      {previewPosition && previewPosition.zone === zoneName && (() => {
+        const is40ft = previewPosition.sizeType === '40ft';
+        const ghostY = (previewPosition.floor - 1) * CTN_H + CTN_H / 2;
+        let ghostX: number;
+        let ghostZ: number;
+        if (is40ft) {
+          const groupIdx = Math.floor(previewPosition.row / 2);
+          const baseRow = groupIdx * 2;
+          ghostX = colX(previewPosition.col);
+          ghostZ = (rowZ(baseRow) + rowZ(baseRow + 1)) / 2;
+        } else {
+          ghostX = colX(previewPosition.col);
+          ghostZ = rowZ(previewPosition.row);
+        }
+        return (
+          <GhostContainer
+            position={[ghostX, ghostY, ghostZ]}
+            sizeType={previewPosition.sizeType}
+            color={wh.color}
+            label={previewPosition.containerCode ?? 'Vị trí gợi ý'}
+          />
+        );
+      })()}
+
       {/* 90% warning indicators */}
       {isWarning && (
         <>
@@ -308,12 +335,13 @@ interface WarehouseSceneProps {
   warehouseType: WHType;
   onZoneClick: (zone: ZoneInfo) => void;
   highlightId?: string;
+  previewPosition?: PreviewPosition | null;
 }
 
 const ZONE_SPACING = 34;
 
 export const WarehouseScene = forwardRef<SceneHandle, WarehouseSceneProps>(
-  ({ warehouseType, onZoneClick, highlightId }, ref) => {
+  ({ warehouseType, onZoneClick, highlightId, previewPosition }, ref) => {
     const handleRef = useRef<SceneHandle | null>(null);
 
     useImperativeHandle(ref, () => ({
@@ -366,6 +394,7 @@ export const WarehouseScene = forwardRef<SceneHandle, WarehouseSceneProps>(
                 whType={warehouseType}
                 onClick={() => handleZoneClick(zone)}
                 highlightId={highlightId}
+                previewPosition={previewPosition?.whType === warehouseType ? previewPosition : null}
               />
             ))}
 

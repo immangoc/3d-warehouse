@@ -437,10 +437,33 @@
 .slot-empty { cursor: pointer; }
 .slot-empty:hover { transform: scale(1.04); }
 .slot-hl { animation: hl-pulse 1.4s ease-in-out infinite; }
+.slot-ghost {
+  animation: ghostPulse 1.5s ease-in-out infinite !important;
+  position: relative;
+}
+.slot-ghost::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 5px;
+  border: 2px dashed currentColor;
+  opacity: 0.4;
+  animation: ghostPulse 1.5s ease-in-out infinite;
+}
 
 @keyframes hl-pulse {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.55; }
+}
+
+@keyframes ghostPulse {
+  0%, 100% { opacity: 0.3; }
+  50%       { opacity: 0.7; }
+}
+
+.wh-floor-btn-ghost {
+  box-shadow: 0 0 0 2px var(--wh-color, #3B82F6);
+  animation: ghostPulse 1.5s ease-in-out infinite;
 }
 
 /* ── Slot tooltip ────────────────────────────────────────────────────────── */

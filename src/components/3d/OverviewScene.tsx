@@ -3,11 +3,12 @@ import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, Environment, ContactShadows, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import { ContainerBlock } from './ContainerBlock';
+import { GhostContainer } from './GhostContainer';
 import {
   ZONES, TOTAL_SLOTS, WARNING_THRESHOLD,
   WH_MAP, getGrid, countFilledSlots,
 } from '../../data/warehouse';
-import type { WHType, ZoneInfo } from '../../data/warehouse';
+import type { WHType, ZoneInfo, PreviewPosition } from '../../data/warehouse';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface OverviewSceneHandle {
@@ -72,9 +73,10 @@ interface ZoneBlockProps {
   whType: WHType;
   onClick: () => void;
   highlightId?: string;
+  previewPosition?: PreviewPosition | null;
 }
 
-function ZoneBlock({ position, zoneName, whType, onClick, highlightId }: ZoneBlockProps) {
+function ZoneBlock({ position, zoneName, whType, onClick, highlightId, previewPosition }: ZoneBlockProps) {
   const wh = WH_MAP[whType];
   const grid = useMemo(() => getGrid(whType, zoneName), [whType, zoneName]);
   const filledCount = useMemo(() => countFilledSlots(whType, zoneName), [whType, zoneName]);
@@ -178,6 +180,31 @@ function ZoneBlock({ position, zoneName, whType, onClick, highlightId }: ZoneBlo
           highlightId={highlightId} />
       ))}
 
+      {/* Ghost container preview */}
+      {previewPosition && previewPosition.zone === zoneName && (() => {
+        const is40ft = previewPosition.sizeType === '40ft';
+        const ghostY = (previewPosition.floor - 1) * CTN_H + CTN_H / 2;
+        let ghostX: number;
+        let ghostZ: number;
+        if (is40ft) {
+          const groupIdx = Math.floor(previewPosition.row / 2);
+          const baseRow = groupIdx * 2;
+          ghostX = colX(previewPosition.col);
+          ghostZ = (rowZ(baseRow) + rowZ(baseRow + 1)) / 2;
+        } else {
+          ghostX = colX(previewPosition.col);
+          ghostZ = rowZ(previewPosition.row);
+        }
+        return (
+          <GhostContainer
+            position={[ghostX, ghostY, ghostZ]}
+            sizeType={previewPosition.sizeType}
+            color={wh.color}
+            label={previewPosition.containerCode ?? 'Vị trí gợi ý'}
+          />
+        );
+      })()}
+
       {isWarning && (
         <WarningBorder centerX={centerX} centerZ={centerZ} width={TOTAL_X + 3} height={TOTAL_Z + 3} />
       )}
@@ -193,9 +220,10 @@ interface WarehouseGroupProps {
   whType: WHType;
   onZoneClick: (zone: ZoneInfo) => void;
   highlightId?: string;
+  previewPosition?: PreviewPosition | null;
 }
 
-function WarehouseGroup({ position, whType, onZoneClick, highlightId }: WarehouseGroupProps) {
+function WarehouseGroup({ position, whType, onZoneClick, highlightId, previewPosition }: WarehouseGroupProps) {
   const wh = WH_MAP[whType];
 
   function handleZoneClick(zoneName: string) {
@@ -225,7 +253,8 @@ function WarehouseGroup({ position, whType, onZoneClick, highlightId }: Warehous
       {ZONES.map((zone, i) => (
         <ZoneBlock key={`${whType}-${zone}`} position={[i * ZONE_SPACING, 0, 0]}
           zoneName={zone} whType={whType} onClick={() => handleZoneClick(zone)}
-          highlightId={highlightId} />
+          highlightId={highlightId}
+          previewPosition={previewPosition?.whType === whType ? previewPosition : null} />
       ))}
     </group>
   );
@@ -278,6 +307,7 @@ function CameraControls({ handleRef, centerX, centerZ }: {
 interface OverviewSceneProps {
   onZoneClick: (zone: ZoneInfo) => void;
   highlightId?: string;
+  previewPosition?: PreviewPosition | null;
 }
 
 const WH_LAYOUT: { type: WHType; row: number; col: number }[] = [
@@ -291,7 +321,7 @@ const WH_COL_SPACING = 120;
 const WH_ROW_SPACING = 60;
 
 export const OverviewScene = forwardRef<OverviewSceneHandle, OverviewSceneProps>(
-  ({ onZoneClick, highlightId }, ref) => {
+  ({ onZoneClick, highlightId, previewPosition }, ref) => {
     const handleRef = useRef<OverviewSceneHandle | null>(null);
 
     useImperativeHandle(ref, () => ({
@@ -323,7 +353,8 @@ export const OverviewScene = forwardRef<OverviewSceneHandle, OverviewSceneProps>
             {WH_LAYOUT.map(({ type, row, col }) => (
               <WarehouseGroup key={type}
                 position={[col * (warehouseWidth + WH_COL_SPACING), 0, row * (TOTAL_Z + WH_ROW_SPACING)]}
-                whType={type} onZoneClick={onZoneClick} highlightId={highlightId} />
+                whType={type} onZoneClick={onZoneClick} highlightId={highlightId}
+                previewPosition={previewPosition} />
             ))}
 
             <CameraControls handleRef={handleRef} centerX={centerX} centerZ={centerZ} />

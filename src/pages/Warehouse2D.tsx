@@ -74,6 +74,7 @@ function Rack({ rows, colStart, color, emptyColor, highlighted, ghostPos, is40ft
   seedBase: number;
   onClickSlot?: (info: SlotInfo) => void;
 }) {
+  const sizeColor = is40ft ? '#38BDF8' : '#F97316';
   if (is40ft) {
     return (
       <div className="rack rack-40ft">
@@ -84,7 +85,7 @@ function Rack({ rows, colStart, color, emptyColor, highlighted, ghostPos, is40ft
           const isGhost = ghostPos?.row === 0 && ghostPos?.col === absCol;
           const info = getSlotInfo(filled, is40ft, seedBase + absCol);
           return (
-            <Slot key={ci} info={info} color={color} emptyColor={emptyColor} isHL={isHL} isGhost={isGhost} onClickSlot={onClickSlot} />
+            <Slot key={ci} info={info} color={sizeColor} emptyColor={emptyColor} isHL={isHL} isGhost={isGhost} onClickSlot={onClickSlot} />
           );
         })}
       </div>
@@ -102,7 +103,7 @@ function Rack({ rows, colStart, color, emptyColor, highlighted, ghostPos, is40ft
             const isGhost = ghostPos?.row === ri && ghostPos?.col === absCol;
             const info = getSlotInfo(filled, is40ft, seedBase + ri * 10 + absCol);
             return (
-              <Slot key={ci} info={info} color={color} emptyColor={emptyColor} isHL={isHL} isGhost={isGhost} onClickSlot={onClickSlot} />
+              <Slot key={ci} info={info} color={sizeColor} emptyColor={emptyColor} isHL={isHL} isGhost={isGhost} onClickSlot={onClickSlot} />
             );
           })}
         </div>

@@ -113,7 +113,7 @@ export function ContainerBlock({
   highlightId,
 }: ContainerBlockProps) {
   const LENGTH = sizeType === '40ft' ? 12.5 : 6.0;
-  const color = getContainerColor(colorSeed);
+  const color = sizeType === '40ft' ? '#38BDF8' : '#F97316';
   const frameColor = darkenHex(color, 45);
 
   const bounceRef = useRef<THREE.Group>(null);
